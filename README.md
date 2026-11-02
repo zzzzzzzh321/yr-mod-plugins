@@ -38,6 +38,8 @@ cargo run --locked --release -p vera-mod-pack -- target/wasm32-unknown-unknown/r
 
 编译与插件单元测试只需要本工程、SDK 和 Rust；运行与游戏验收使用兼容的现成引擎及游戏资源。完整说明见[独立开发指南](sdk/dev-kit/README.zh-CN.md)与[弹药机制说明](plugins/vera20k-ares/AMMO.zh-CN.md)。
 
+要实际操作已有功能，使用[六区测试地图与启动说明](plugins/vera20k-ares/examples/sdk-lab/README.zh-CN.md)。同一引擎可切换原版对照、兼容护盾和过载护盾三种模式。
+
 ## 与引擎的分工
 
 引擎仓库负责 SDK 接口、WIT、组件运行时和通用宿主接入。本工程负责插件算法、配置解释与开发工具；引擎不再包含这份插件源码或打包工具。
@@ -48,4 +50,4 @@ cargo run --locked --release -p vera-mod-pack -- target/wasm32-unknown-unknown/r
 
 本工程迁自 VERA20K 本地源码提交 `314dfcbb5202a171d17edbd79fc1fab21d77e3f0`；原实现历史保留在引擎 Git 仓库。迁移保留文件内容、原有代码注释、贡献者说明和 GPL 许可，见 [LICENSE-GPL](LICENSE-GPL)。
 
-当前内部组件标识仍为 `vera.reference-gameplay`，组件版本 0.4.0、配置版本 4、状态版本 1。本工程使用独立本地 Git 管理，未经授权不上传或公开。
+当前内部组件标识仍为 `vera.reference-gameplay`，组件版本 0.4.1、配置版本 4、状态版本 1。本工程使用独立本地 Git 管理，未经授权不上传或公开。

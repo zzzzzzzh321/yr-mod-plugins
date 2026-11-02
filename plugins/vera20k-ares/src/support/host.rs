@@ -54,6 +54,14 @@ impl<H: Host> Section<'_, H> {
         reader: &str,
         current: T,
     ) -> T {
+        // Native typed readers retain current for an absent key. Probe through
+        // the host's own lookup (including projected Rules passes), avoiding
+        // JSON/WIT round trips for thousands of unused extension defaults.
+        // ReadString also trims/truncates its default, so always delegate it.
+        // Present empty/invalid values still go through the native reader.
+        if !reader.starts_with("string:") && !self.is_present(key) {
+            return current;
+        }
         let outcome = serde_json::to_vec(&current)
             .map_err(|e| e.to_string())
             .and_then(|bytes| self.view.host.config_read(&self.name, key, reader, &bytes))
@@ -146,5 +154,67 @@ impl Host for WasmHost {
         let bytes = serde_json::to_vec(input).map_err(|e| e.to_string())?;
         let result = crate::bindings::vera::mod_sdk::host::damage_kernel(&bytes)?;
         serde_json::from_slice(&result).map_err(|e| e.to_string())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct PresenceHost;
+    impl Host for PresenceHost {
+        fn config(&self, _: &str, key: &str) -> Option<String> {
+            (key == "Empty").then(String::new)
+        }
+        fn config_read(
+            &self,
+            _: &str,
+            key: &str,
+            reader: &str,
+            _: &[u8],
+        ) -> Result<Vec<u8>, String> {
+            match (key, reader) {
+                ("Missing", "string:4") => Ok(br#""abc""#.to_vec()),
+                ("Empty", "ares-int") => Ok(b"7".to_vec()),
+                ("Empty", "nullable-int") => Err("reader failure".into()),
+                _ => panic!("absent values must retain their defaults without JSON round trips"),
+            }
+        }
+        fn registry(&self, _: &str) -> Vec<String> {
+            panic!("no registry needed")
+        }
+        fn damage_kernel(&self, _: &DamageKernelInput) -> Result<i32, String> {
+            panic!("no damage calculation")
+        }
+    }
+
+    #[test]
+    fn absent_fields_retain_defaults_but_strings_still_use_native_copy() {
+        let view = ConfigView::new(&PresenceHost);
+        let section = view.section_or_empty("Unit");
+        assert_eq!(section.read_ares_int("Missing", 3), 3);
+        assert!(section.read_bool("Missing", true));
+        assert_eq!(
+            section.read_phobos_nullable_int("Missing", Some(9)),
+            Some(9)
+        );
+        let special = f64::from_bits(0x7ff8_0000_0000_1234);
+        assert_eq!(
+            section.read_double("Missing", special).to_bits(),
+            special.to_bits()
+        );
+        assert_eq!(section.read_list("Missing", 128), None);
+        // Native ReadString trims/truncates even an absent key's default.
+        assert_eq!(section.read_string("Missing", "abcdef", 4), "abc");
+        view.finish().unwrap();
+    }
+
+    #[test]
+    fn present_empty_fields_and_host_errors_still_reach_native_reader() {
+        let view = ConfigView::new(&PresenceHost);
+        let section = view.section_or_empty("Unit");
+        assert_eq!(section.read_ares_int("Empty", 3), 7);
+        assert_eq!(section.read_phobos_nullable_int("Empty", Some(9)), Some(9));
+        assert!(view.finish().unwrap_err().contains("reader failure"));
     }
 }

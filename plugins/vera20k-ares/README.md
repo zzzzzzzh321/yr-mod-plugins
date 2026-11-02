@@ -15,7 +15,7 @@ This plugin is maintained in the independent `plugin-dev` project at
 dependencies and the packager; the runtime stays in the engine. The Cargo package is
 `vera20k-ares`, its raw core artifact is `vera20k_ares.wasm`, and its publication
 filename is `vera20k-ares.wasm`. The internal `vera.reference-gameplay` identity,
-version 0.4.0, config_version=4 and state_version=1 remain unchanged. The filename
+version 0.4.1, config_version=4 and state_version=1. The filename
 does not claim complete Ares compatibility; the retained Phobos-compatible
 shield and authored overload remain examples in this first plugin.
 
@@ -26,6 +26,9 @@ are local SDK snapshots whose authoritative source and version are recorded in
 game assets or Python runner. Game integration uses a compatible engine.
 
 ## What runs in the component
+
+For a playable six-zone test map and vanilla/compatible/overload launch modes,
+see the [Chinese lab guide](examples/sdk-lab/README.zh-CN.md).
 
 - Each reached Rules pass reads the `ShieldTypes` catalog through the host's
   existing INI readers. The final resolved pass binds object and warhead names
