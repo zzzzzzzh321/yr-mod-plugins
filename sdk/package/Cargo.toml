@@ -1,0 +1,13 @@
+[package]
+name = "vera-mod-pack"
+version = "0.1.0"
+edition = "2024"
+license = "GPL-3.0-or-later"
+description = "Package a portable VERA gameplay core module as a validated component"
+
+[dependencies]
+anyhow = "1"
+serde_json = "1"
+sha2 = "0.10"
+vera-mod-api = { path = "../api" }
+wit-component = "=0.244.0"

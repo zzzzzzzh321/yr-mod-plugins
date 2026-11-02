@@ -1,0 +1,6 @@
+# Standalone SDK workspace. Copy this file to the development kit's root as
+# Cargo.toml, beside sdk/ and plugins/. No engine crate is a workspace member.
+[workspace]
+resolver = "3"
+members = ["sdk/api", "sdk/package", "plugins/vera20k-ares"]
+default-members = ["plugins/vera20k-ares"]

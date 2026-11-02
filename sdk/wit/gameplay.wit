@@ -1,0 +1,13 @@
+package vera:mod-sdk@0.1.0;
+
+interface host {
+    config: func(section: string, key: string) -> option<string>;
+    config-read: func(section: string, key: string, reader: string, current: list<u8>) -> result<list<u8>, string>;
+    registry: func(section: string) -> list<string>;
+    damage-kernel: func(input: list<u8>) -> result<list<u8>, string>;
+}
+
+world gameplay {
+    import host;
+    export evaluate: func(kind: string, input: list<u8>) -> result<list<u8>, string>;
+}

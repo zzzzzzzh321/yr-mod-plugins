@@ -1,0 +1,12 @@
+{
+  "kind": "versioned-sdk-interface-snapshot",
+  "api_version": 1,
+  "wit_package": "vera:mod-sdk@0.1.0",
+  "source_repository": "../engine",
+  "source_revision": "314dfcbb5202a171d17edbd79fc1fab21d77e3f0",
+  "paths": [
+    "sdk/api",
+    "sdk/wit"
+  ],
+  "authority": "The engine owns these interfaces. Update this snapshot as an explicit SDK version change; plugin builds resolve only local SDK files."
+}
