@@ -1,7 +1,9 @@
 //! Narrow configuration and numeric imports. No guest file, clock, or network access.
 use serde::{Serialize, de::DeserializeOwned};
 use std::cell::RefCell;
-use vera_mod_api::{ArmorVersePolicy, DamageKernelInput, ProductionRegistryView};
+use vera_mod_api::{
+    ArmorVersePolicy, DamageKernelInput, NullableResourceName, ProductionRegistryView,
+};
 
 pub trait Host {
     fn config(&self, section: &str, key: &str) -> Option<String>;
@@ -128,6 +130,12 @@ impl<H: Host> Section<'_, H> {
     pub fn read_ares_int(&self, key: &str, current: i32) -> i32 {
         self.read(key, "ares-int", current)
     }
+    pub fn read_ares_emp_threshold(&self, key: &str, current: i32) -> i32 {
+        self.read(key, "ares-emp-threshold", current)
+    }
+    pub fn read_ares_nullable_mission(&self, key: &str, current: Option<u16>) -> Option<u16> {
+        self.read(key, "ares-nullable-mission", current)
+    }
     pub fn read_bool(&self, key: &str, current: bool) -> bool {
         self.read(key, "bool", current)
     }
@@ -168,6 +176,18 @@ impl<H: Host> Section<'_, H> {
         let reader = match &self.registry {
             Some(scope) => format!("ares-ref:{registry}@{scope}"),
             None => format!("ares-ref:{registry}"),
+        };
+        self.read(key, &reader, current)
+    }
+    pub fn read_ares_nullable_registered_name(
+        &self,
+        key: &str,
+        current: NullableResourceName,
+        registry: &str,
+    ) -> NullableResourceName {
+        let reader = match &self.registry {
+            Some(scope) => format!("ares-nullable-ref:{registry}@{scope}"),
+            None => format!("ares-nullable-ref:{registry}"),
         };
         self.read(key, &reader, current)
     }

@@ -69,6 +69,15 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
             .production_resource
             .is_some()
     );
+    let emp = Context::EmpResource(vera_mod_api::EmpResourceContext::Rules);
+    assert_eq!(
+        query(vec![], emp.clone()).emp_resource,
+        Some(vera_mod_api::EmpResourcePolicy::Rules {
+            enabled: true,
+            ai_recover_mission: None,
+            reactivation_requires_powered_center: true,
+        })
+    );
     assert!(
         query(
             vec![],
@@ -101,6 +110,27 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
         query(bytes.clone(), production)
             .production_resource
             .is_none()
+    );
+    assert_eq!(
+        query(bytes.clone(), emp).emp_resource,
+        Some(vera_mod_api::EmpResourcePolicy::Rules {
+            enabled: false,
+            ai_recover_mission: None,
+            reactivation_requires_powered_center: false,
+        })
+    );
+    assert_eq!(
+        query(
+            bytes.clone(),
+            Context::EmpResource(vera_mod_api::EmpResourceContext::Type {
+                user: vera_mod_api::WEAPON_USER_UNIT,
+                name: "ORDINARY".into(),
+            })
+        )
+        .emp_resource,
+        Some(vera_mod_api::EmpResourcePolicy::Type {
+            policy: vera_mod_api::EmpTypePolicy::default()
+        })
     );
     let old_type = query(bytes, object).type_resource.unwrap();
     assert!(old_type.reload.is_none() && old_type.depleted_weapon.is_none());

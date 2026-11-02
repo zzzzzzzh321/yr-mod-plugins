@@ -11,9 +11,9 @@ use registry::Registry;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use vera_mod_api::{
-    ConfigureContext, ProductionBuildLimitRule, ProductionObjectKind, ProductionObjectPolicy,
-    ProductionPrerequisiteRule, ProductionReadSite, ProductionResourceContext,
-    ProductionResourcePolicy, ProductionSemantics,
+    ProductionBuildLimitRule, ProductionObjectKind, ProductionObjectPolicy,
+    ProductionPrerequisiteRule, ProductionReadSite, ProductionRegistryView,
+    ProductionResourceContext, ProductionResourcePolicy, ProductionSemantics,
 };
 
 #[derive(Default, Serialize, Deserialize)]
@@ -39,14 +39,10 @@ impl Configuration {
 
     pub(crate) fn configure<H: Host>(
         &mut self,
-        context: &ConfigureContext,
         view: &ConfigView<'_, H>,
+        physical: &ProductionRegistryView,
     ) -> Result<(), String> {
-        if context.final_pass {
-            return Ok(());
-        }
-        let physical = view.rules_registry_view()?;
-        let registry = Registry::new(&physical);
+        let registry = Registry::new(physical);
         let mut group_lookup = self.groups.lookup();
         for read in &physical.reads {
             registry.validate(read.prefix)?;

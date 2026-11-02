@@ -4,6 +4,7 @@
 mod armor;
 mod configuration;
 mod effects;
+mod emp;
 mod match_rules;
 pub mod native_string;
 mod production;
@@ -17,6 +18,9 @@ pub use configuration::{ConfigurationBoundary, ConfigureBoundaryContext};
 pub use effects::{
     EffectAction, EffectContext, EffectControl, EffectDescriptor, EffectEvent, EffectInstanceView,
     EffectPlan, EffectResourceContext, EffectResourceKind,
+};
+pub use emp::{
+    EmpResourceContext, EmpResourcePolicy, EmpTypePolicy, EmpWarheadPolicy, NullableResourceName,
 };
 pub use match_rules::{
     CloakRuntimePolicy, EffectRuntimePolicy, MatchRulesContext, MatchRulesPolicy, SurvivalRule,
@@ -69,6 +73,7 @@ pub enum HookKind {
     ArmorResource,
     ProductionResource,
     ConfigureBoundary,
+    EmpResource,
 }
 
 impl HookKind {
@@ -86,6 +91,7 @@ impl HookKind {
             Self::ArmorResource => "armor_resource",
             Self::ProductionResource => "production_resource",
             Self::ConfigureBoundary => "configure_boundary",
+            Self::EmpResource => "emp_resource",
         }
     }
 }
@@ -189,6 +195,7 @@ pub enum Context {
     ArmorResource(ArmorResourceContext),
     ProductionResource(ProductionResourceContext),
     ConfigureBoundary(ConfigureBoundaryContext),
+    EmpResource(EmpResourceContext),
 }
 
 impl Context {
@@ -206,6 +213,7 @@ impl Context {
             Self::ArmorResource(_) => HookKind::ArmorResource,
             Self::ProductionResource(_) => HookKind::ProductionResource,
             Self::ConfigureBoundary(_) => HookKind::ConfigureBoundary,
+            Self::EmpResource(_) => HookKind::EmpResource,
         }
     }
 }
@@ -251,6 +259,8 @@ pub struct Plan {
     pub armor_resource: Option<ArmorResourcePolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub production_resource: Option<ProductionResourcePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub emp_resource: Option<EmpResourcePolicy>,
 }
 
 impl Plan {
@@ -269,6 +279,7 @@ impl Plan {
             effects: None,
             armor_resource: None,
             production_resource: None,
+            emp_resource: None,
         }
     }
 }
@@ -349,6 +360,7 @@ impl Request {
         let user = match &self.context {
             Context::TypeResource(context) => Some(context.user),
             Context::Effects(context) => Some(context.user),
+            Context::EmpResource(EmpResourceContext::Type { user, .. }) => Some(*user),
             _ => None,
         };
         if let Some(user) = user
@@ -376,7 +388,9 @@ impl Request {
             Context::EffectResource(_) => None,
             Context::Effects(context) => Some(context.entity.id),
             Context::ArmorResource(_) => None,
-            Context::ProductionResource(_) | Context::ConfigureBoundary(_) => None,
+            Context::ProductionResource(_)
+            | Context::ConfigureBoundary(_)
+            | Context::EmpResource(_) => None,
         }
     }
 }
@@ -444,6 +458,7 @@ impl Plan {
                 | HookKind::ArmorResource
                 | HookKind::ProductionResource
                 | HookKind::ConfigureBoundary
+                | HookKind::EmpResource
         ) && (!self.state.is_empty()
             || self.projection.is_some()
             || !self.operations.is_empty()
@@ -466,6 +481,12 @@ impl Plan {
         if let Some(policy) = &self.production_resource {
             let Context::ProductionResource(context) = &request.context else {
                 return Err("only production_resource may define production resources".into());
+            };
+            policy.validate_for(context)?;
+        }
+        if let Some(policy) = &self.emp_resource {
+            let Context::EmpResource(context) = &request.context else {
+                return Err("only emp_resource may define EMP resources".into());
             };
             policy.validate_for(context)?;
         }
@@ -527,6 +548,52 @@ pub struct DamageKernelInput {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn emp_resources_preserve_nullable_names_and_reject_simulation_writes() {
+        let inherit = serde_json::to_vec(&NullableResourceName::Inherit).unwrap();
+        let clear = serde_json::to_vec(&NullableResourceName::Clear).unwrap();
+        assert_ne!(inherit, clear);
+        assert_eq!(
+            serde_json::from_slice::<NullableResourceName>(&clear).unwrap(),
+            NullableResourceName::Clear
+        );
+        let mut request = Request {
+            api_version: API_VERSION,
+            context: Context::EmpResource(EmpResourceContext::Type {
+                user: WEAPON_USER_UNIT,
+                name: "TANK".into(),
+            }),
+            config: vec![],
+            state: vec![],
+        };
+        request.validate().unwrap();
+        let mut plan = Plan::unchanged(&request);
+        plan.emp_resource = Some(EmpResourcePolicy::Type {
+            policy: EmpTypePolicy::default(),
+        });
+        plan.validate_for(&request).unwrap();
+        plan.state.push(1);
+        assert!(plan.validate_for(&request).is_err());
+        plan.state.clear();
+        request.context = Context::EmpResource(EmpResourceContext::Warhead { name: "EMP".into() });
+        assert!(
+            plan.validate_for(&request).is_err(),
+            "type policy cannot answer a warhead query"
+        );
+        request.context = Context::ConfigureBoundary(ConfigureBoundaryContext {
+            boundary: ConfigurationBoundary::TypeReset,
+        });
+        assert!(
+            plan.validate_for(&request).is_err(),
+            "a configuration boundary cannot emit resources"
+        );
+        request.context = Context::EmpResource(EmpResourceContext::Type {
+            user: 0,
+            name: "TANK".into(),
+        });
+        assert!(request.validate().is_err());
+    }
 
     #[test]
     fn production_resources_and_configuration_boundaries_reject_cross_domain_writes() {
