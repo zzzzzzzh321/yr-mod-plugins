@@ -158,3 +158,114 @@ fn manual_input_is_frozen_class_scoped_and_independently_disabled() {
             .is_none()
     );
 }
+
+/// These are decoded host responses, not another INI parser. Exercise the
+/// normal Configure composition and ConfigView's native-reader delegation.
+struct SlotConfigHost(i32);
+impl Host for SlotConfigHost {
+    fn config(&self, section: &str, key: &str) -> Option<String> {
+        matches!(
+            (section, key),
+            ("VeraFeatures", "AresNoAmmoWeapon") | ("TANK", "NoAmmoWeapon" | "NoAmmoAmount")
+        )
+        .then(|| "host-owned fixture".into())
+    }
+    fn config_read(
+        &self,
+        section: &str,
+        key: &str,
+        reader: &str,
+        _: &[u8],
+    ) -> Result<Vec<u8>, String> {
+        match (section, key, reader) {
+            ("VeraFeatures", "AresNoAmmoWeapon", "bool") => Ok(b"true".to_vec()),
+            ("TANK", "NoAmmoWeapon", "ares-int") => {
+                serde_json::to_vec(&self.0).map_err(|e| e.to_string())
+            }
+            ("TANK", "NoAmmoAmount", "ares-int") => Ok(b"3".to_vec()),
+            _ => panic!("unexpected configuration reader: {section}/{key}/{reader}"),
+        }
+    }
+    fn registry(&self, _: &str) -> Vec<String> {
+        vec![]
+    }
+    fn damage_kernel(&self, _: &DamageKernelInput) -> Result<i32, String> {
+        panic!("no damage calculation during configure")
+    }
+}
+
+fn configure_no_ammo_weapon(config: Vec<u8>, index: i32) -> Vec<u8> {
+    let request = Request {
+        api_version: API_VERSION,
+        context: Context::Configure(vera_mod_api::ConfigureContext {
+            pass: 0,
+            source: "slot-fixture".into(),
+            final_pass: true,
+            object_types: vec!["TANK".into()],
+            warheads: vec![],
+        }),
+        config,
+        state: vec![],
+    };
+    let plan = evaluate(&request, &SlotConfigHost(index)).expect("native i32 slot is admitted");
+    plan.validate_for(&request).unwrap();
+    plan.config.unwrap()
+}
+
+#[test]
+fn no_ammo_weapon_config_preserves_higher_and_signed_boundary_indices() {
+    use vera_mod_api::{WEAPON_USER_AIRCRAFT, WEAPON_USER_INFANTRY, WEAPON_USER_UNIT};
+    // Weapon3, the last array slot and the signed upper boundary exercise
+    // configuration, frozen queries and class routing without a cross-product.
+    for (index, user) in [
+        (2, WEAPON_USER_UNIT),
+        (17, WEAPON_USER_INFANTRY),
+        (i32::MAX, WEAPON_USER_AIRCRAFT),
+    ] {
+        let request = Request {
+            api_version: API_VERSION,
+            context: Context::TypeResource(TypeResourceContext {
+                type_name: "TANK".into(),
+                user,
+            }),
+            config: configure_no_ammo_weapon(vec![], index),
+            state: vec![],
+        };
+        let plan = evaluate(&request, &FrozenHost).unwrap();
+        plan.validate_for(&request).unwrap();
+        let policy = plan.type_resource.unwrap();
+        assert_eq!(
+            policy.depleted_weapon,
+            Some(vera_mod_api::DepletedWeaponPolicy {
+                weapon_index: index,
+                threshold: 3
+            })
+        );
+        assert!(policy.applies_to(user));
+        assert!(policy.reload.is_none() && policy.input.is_none());
+    }
+}
+
+#[test]
+fn negative_no_ammo_weapon_reconfiguration_removes_the_previous_override() {
+    // Configure is reused with retained frozen configuration. A negative
+    // index disables the earlier override instead of preserving a stale slot.
+    let earlier = configure_no_ammo_weapon(vec![], 2);
+    for index in [-2, i32::MIN] {
+        let request = Request {
+            api_version: API_VERSION,
+            context: Context::TypeResource(TypeResourceContext {
+                type_name: "TANK".into(),
+                user: vera_mod_api::WEAPON_USER_UNIT,
+            }),
+            config: configure_no_ammo_weapon(earlier.clone(), index),
+            state: vec![],
+        };
+        let plan = evaluate(&request, &FrozenHost).unwrap();
+        plan.validate_for(&request).unwrap();
+        assert!(
+            plan.type_resource.is_none(),
+            "negative index {index} disables the override"
+        );
+    }
+}

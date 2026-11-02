@@ -15,7 +15,7 @@ This plugin is maintained in the independent `plugin-dev` project at
 dependencies and the packager; the runtime stays in the engine. The Cargo package is
 `vera20k-ares`, its raw core artifact is `vera20k_ares.wasm`, and its publication
 filename is `vera20k-ares.wasm`. The internal `vera.reference-gameplay` identity,
-version 0.5.0, config_version=5 and state_version=1. The filename
+version 0.6.0, config_version=5 and state_version=1. The filename
 does not claim complete Ares compatibility; the retained Phobos-compatible
 shield and authored overload remain examples in this first plugin.
 
@@ -111,7 +111,7 @@ per-type `ReloadAmount`, `EmptyReloadAmount`, `NoAmmoWeapon`, `NoAmmoAmount`
 settings retain their syntax. Layered selection
 is frozen with the configuration and saved/checksummed; it cannot change during
 a match. `examples/features.ini` shows the combined selection. The component
-identity is `vera.reference-gameplay` 0.5.0, config_version=5, state_version=1.
+identity is `vera.reference-gameplay` 0.6.0, config_version=5, state_version=1.
 Retained older component files keep their original behavior and identity.
 
 `ReloadAmount` defaults to 1 and `EmptyReloadAmount` defaults to the normal
@@ -121,20 +121,36 @@ without an `EmptyReload` interval. Its existing completion path applies signed
 result at the type's capacity. Aircraft dock/radio reload is excluded; ordinary
 infantry/buildings use the shared reload owner with Hospital/Armory exceptions.
 
-`NoAmmoWeapon` defaults to -1 (disabled); 0/1 selects primary/secondary when type
-capacity is nonnegative and current signed ammo is at or below `NoAmmoAmount`
-(default 0). This threshold is not a weapon-cost test. Earlier DeployFire and
-open-transport selection branches retain priority, and the selected weapon still
-passes normal CanFire checks. Aircraft may use this selection policy. To fire a
-free backup at zero ammo for a supported ground category, also enable AresAmmo
-and give that weapon `Ammo=0`. Aircraft still use their own release, return and
-dock-reload mechanisms; weapon Ammo=0 does not make aircraft shots free.
+`NoAmmoWeapon` defaults to -1. Every negative value disables this override;
+every nonnegative signed 32-bit value is published unchanged, matching Ares
+hook10047B08..10047B1D. The host applies it when the type capacity is
+nonnegative and current signed ammo is at or below `NoAmmoAmount` (default 0).
+This threshold is not a weapon-cost test. Slots 0/1 select primary/secondary;
+slots 2..17 use the existing weapon array and live elite-slot fallback.
 
-This reference rejects NoAmmoWeapon values outside -1/0/1 during configuration.
-The upstream DLL can pass other nonnegative indices onward, but its documented
-contract supports only primary/secondary; the reference reports this restricted
-configuration boundary instead of silently clamping. See the
-[Ares resource guide](AMMO.zh-CN.md) and [combined example](examples/resource-cycle.ini).
+`WeaponN`/`EliteWeaponN` are read only in the `TurretCount>0` Rules branch;
+`Weapon3` is index 2. The non-gattling gunner branch returns its current slot
+before the NoAmmoWeapon hook, so it cannot be overridden. A type using those
+higher slots normally needs `IsGattling=yes` as well as positive `TurretCount`.
+Earlier DeployFire, occupied-building, missing primary/secondary, NeverUse,
+null-target and open-transport selection returns retain priority. Selection
+never searches other slots after an empty or unusable chosen weapon.
+
+The host supports the fixed 0..17 array. Indices at or above 18 still reach the
+policy unchanged, but host lookup safely returns no weapon; the original DLL
+would read outside its arrays. This is a retained safety difference, not an
+Ares configuration rejection. Building animation-delayed shots require the
+matching host that retains the complete selected index through its delayed-fire
+state and save/restore path; an older host can collapse higher indices to slot 0.
+Version 0.6.0 changes no SDK fields or configuration/state schemas.
+
+Aircraft may use this selection policy. Their weapon-0-specific approach,
+strafe, ROF and projectile-course reads keep their original ownership. To fire
+a free backup at zero ammo for a supported ground category, also enable
+AresAmmo and give that weapon `Ammo=0`. Aircraft retain their own release,
+return and dock-reload mechanisms; weapon Ammo=0 does not make aircraft shots
+free. See the [Ares resource guide](AMMO.zh-CN.md) and
+[combined example](examples/resource-cycle.ini).
 
 The packager uses the embedded WIT metadata to encode and validate a standalone
 component; it never executes the guest or adds WASI adapters. A direct

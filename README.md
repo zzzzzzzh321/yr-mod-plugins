@@ -52,4 +52,6 @@ cargo run --locked --release -p vera-mod-pack -- target/wasm32-unknown-unknown/r
 
 Ares 全量兼容以[逐项兼容台账](compatibility/README.zh-CN.md)持续跟踪，包含官方功能、修复和参考入口；文件名不表示全量兼容已完成。
 
-当前内部组件标识仍为 `vera.reference-gameplay`，组件版本 0.5.0、配置版本 5、状态版本 1。本工程使用独立本地 Git 管理，未经授权不上传或公开。
+`NoAmmoWeapon`按安装版Ares的有符号整数语义处理：任意负数关闭，非负索引原样发布；有效0..17槽复用宿主现有选择器和精英回退。`WeaponN`读取、炮手提前返回及>=18安全无武器的边界见[弹药机制说明](plugins/vera20k-ares/AMMO.zh-CN.md)。建筑动画延迟枪需使用保存完整索引的配套新版宿主。0.6.0不扩展SDK或配置/状态结构。
+
+当前内部组件标识仍为 `vera.reference-gameplay`，组件版本 0.6.0、配置版本 5、状态版本 1。本工程使用独立本地 Git 管理，未经授权不上传或公开。

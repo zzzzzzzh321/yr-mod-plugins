@@ -21,11 +21,10 @@ impl Configuration {
         for name in &context.object_types {
             let section = view.section_or_empty(name);
             let index = section.read_ares_int("NoAmmoWeapon", -1);
-            // Documented Ares slots are primary/secondary. Refuse unsupported
-            // configuration instead of mapping an invalid slot to another gun.
-            if !matches!(index, -1..=1) {
-                return Err(format!("[{name}] NoAmmoWeapon must be -1, 0 or 1"));
-            }
+            // Ares10047B08..10047B1D tests only the sign and returns the
+            // complete nonnegative index. Every negative value disables this
+            // override. Slot lookup/elite fallback and the host's array safety
+            // bound belong to GetWeapon, not to configuration or this policy.
             if index >= 0 {
                 self.weapons.insert(
                     name.clone(),

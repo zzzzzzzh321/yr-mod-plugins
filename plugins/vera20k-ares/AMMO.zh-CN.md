@@ -1,6 +1,6 @@
 # 外置 Ares 弹药、装填与武器选择
 
-插件源码独立位于 `plugins/vera20k-ares`，发布文件名为 `vera20k-ares.wasm`；SDK基础设施保留在 `sdk`。统一参考组件0.5.0通过三个独立INI开关选择Ares弹药链功能，无须构建参数：
+插件源码独立位于 `plugins/vera20k-ares`，发布文件名为 `vera20k-ares.wasm`；SDK基础设施保留在 `sdk`。统一参考组件0.6.0通过三个独立INI开关选择Ares弹药链功能，无须构建参数：
 
 | `[VeraFeatures]`开关 | 配置位置与标签 | 插件提供的策略 |
 | --- | --- | --- |
@@ -83,15 +83,20 @@ NoAmmoWeapon=1
 NoAmmoAmount=1
 ```
 
-- `NoAmmoWeapon`默认-1，表示关闭；0选主武器，1选副武器。
+- `NoAmmoWeapon`默认-1；**任意负数**都关闭此覆盖，任意非负32位有符号整数原样交给宿主，不在插件配置阶段夹取或拒绝。0选主武器，1选副武器，2..17复用宿主已有武器数组与精英武器回退；例如索引2对应`Weapon3`/`EliteWeapon3`。
 - `NoAmmoAmount`默认0。类型容量必须`Ammo>=0`，并且当前弹量`<=NoAmmoAmount`才满足条件。它按弹量比较，**不按主武器每发成本判断是否够用**。
 - 比较保留有符号语义：类型容量为有限值，但实例当前弹量为负数时，也可能满足阈值。类型`Ammo=-1`则不应用此选择策略。
-- 插入共享选择器中Ares对应的阶段，保留DeployFire、敞篷指定武器等更早分支优先级。选定槽后仍走已有武器解析和CanFire检查，不会因为不能开火就自动遍历其他槽。
-- 这项选择策略可以用于飞机；它与不支持飞机的武器成本/装填数量策略分开。飞机不能靠武器`Ammo=0`获得这里的免费开火策略，其释放、返航和停靠补弹仍按原机制。
+- 插入共享选择器中Ares对应的阶段，保留DeployFire、非Gattling的炮手当前武器、驻军建筑、主副武器缺失、副武器`NeverUse`、空目标和敞篷指定武器等更早分支优先级。选定槽后仍走已有武器解析和CanFire检查；空槽或不能开火都不会自动遍历其他槽。
+- `WeaponN`/`EliteWeaponN`只在`TurretCount>0`的规则读取分支填充。非Gattling炮手在进入此覆盖前就返回当前武器槽，因此使用更高槽索引的类型通常还需要`IsGattling=yes`。`WeaponCount`限制配置读取循环，不能在运行选择时重新截掉之前规则层保留的槽。
+- 有效数组范围是0..17。索引>=18仍原样发布，但宿主的既有安全检查返回无武器；原DLL会越界读取，可能出错。本工程保留此安全差异，不把它描述成原DLL拒绝了配置。
+- 这项选择策略可以用于飞机；它与不支持飞机的武器成本/装填数量策略分开。飞机不能靠武器`Ammo=0`获得这里的免费开火策略，其释放、返航和停靠补弹仍按原机制。飞机接近、扫射和部分ROF/弹道仍按原逻辑读取武器0，不能因本策略选择了其它槽就统一改写。
 - 若要在空仓时让备用武器继续开火，需同时开启`AresAmmo=yes`，并把备用武器节的`Ammo=0`。仅选择副武器不会免除其弹药要求。
-- 本组件严格接纳-1、0、1；其他值在配置阶段明确报错，不默默夹取。上游DLL实际上还允许其他非负槽索引进入后续流程，但官方文档只支持主副两槽；此处是明确的受限配置边界。
 
-官方契约见[NoAmmoWeapon](https://ares-developers.github.io/Ares-docs/new/noammoweapon.html)。对应配置模块为[empty_weapon.rs](src/features/weapons/empty_weapon.rs)。
+0.6.0移除了旧版组件仅允许-1/0/1的人工边界。原始Ares读取器`1003EF01 -> 1000A570`保存整数，选择hook`10047AE0`中的`10047B08..10047B1D`只测试索引符号，再原样返回非负索引。官方说明仍只举主副武器；此处明确区分文档所列常见值和安装DLL的真实接纳行为。
+
+建筑动画延迟开火需要配套新版宿主，在既有延迟状态、保存与恢复中保留完整索引。旧宿主只保留主副两值时，高槽可能错误变成主武器。本版不扩展SDK字段，配置版本仍5、状态版本仍1；组件身份升至0.6.0。高槽与建筑延迟枪的实际组件/宿主联合验证仍以[兼容台账](../../compatibility/README.zh-CN.md)为准。
+
+官方说明见[NoAmmoWeapon](https://ares-developers.github.io/Ares-docs/new/noammoweapon.html)。对应配置模块为[empty_weapon.rs](src/features/weapons/empty_weapon.rs)。
 
 三个Ares开关及全部四个类型扩展键的组合示例见[resource-cycle.ini](examples/resource-cycle.ini)。示例使用LTNK与两份完整武器定义，普通武器成本2、备用成本0。实际射击可与装填交错，具体弹量序列取决于原装填和开火时钟；示例不另行重置这些时钟。
 
@@ -129,7 +134,7 @@ cargo build --locked -p vera20k-ares --target wasm32-unknown-unknown --release
 
 按 [中文 SDK README](../../sdk/README.zh-CN.md) 将 `target/wasm32-unknown-unknown/release/vera20k_ares.wasm` 打包到新目录，并传入 `--program vera20k-ares.wasm`。设置外部 `CARGO_TARGET_DIR` 时使用该目录中的实际输入路径。发布内容为 `vera20k-ares.wasm` 加 `vera-mod.json`；通用打包器省略该选项时仍使用默认名 `gameplay.wasm`。
 
-需要护盾或过载时，在同一个`[VeraFeatures]`节增加`Shield=yes`、`Overload=yes`。发布文件名与内部组件标识分别维护。所有组合继续使用同一`vera.reference-gameplay`组件，版本0.4.0，config_version=4，state_version=1。五个开关默认关闭，过载依赖护盾，选择随存档冻结。目录迁移和重新编译会改变组件摘要，旧存档仍需对应的原组件文件。
+需要护盾或过载时，在同一个`[VeraFeatures]`节增加`Shield=yes`、`Overload=yes`。发布文件名与内部组件标识分别维护。所有组合继续使用同一`vera.reference-gameplay`组件，版本0.6.0，config_version=5，state_version=1。六个开关默认关闭，过载依赖护盾，选择随存档冻结。手动操作开关`AresManualControl`及其独立配置见[手动操作说明](MANUAL.zh-CN.md)。目录迁移和重新编译会改变组件摘要，旧存档仍需对应的原组件文件。
 
 新引擎验收模式 `ammo` 使用兼容护盾加弹药组件，报告文件必须为新文件，父目录已存在：
 
