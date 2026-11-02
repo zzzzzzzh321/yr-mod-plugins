@@ -227,7 +227,11 @@ pub(crate) fn evaluate<H: Host>(
             (next, &context.entity, context.frame)
         }
         Context::Configure(_) => return Err("configuration must use the configuration hook".into()),
-        Context::WeaponResource(_) | Context::TypeResource(_) => {
+        Context::WeaponResource(_)
+        | Context::TypeResource(_)
+        | Context::MatchRules(_)
+        | Context::EffectResource(_)
+        | Context::Effects(_) => {
             return Err("resource policy must use its own hook".into());
         }
     };

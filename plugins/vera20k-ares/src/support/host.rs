@@ -35,7 +35,20 @@ impl<'a, H: Host> ConfigView<'a, H> {
         Section {
             view: self,
             name: name.to_owned(),
+            registry: None,
         }
+    }
+    pub fn section_in_registry(&self, name: &str, registry: &str) -> Section<'_, H> {
+        Section {
+            view: self,
+            name: name.to_owned(),
+            registry: Some(registry.to_owned()),
+        }
+    }
+    /// Canonical type identities at this physical Rules pass. These registries
+    /// include types allocated by references, not just an INI list's keys.
+    pub fn registered_names(&self, registry: &str) -> Vec<String> {
+        self.host.registry(registry)
     }
     pub fn finish(&self) -> Result<(), String> {
         self.error.borrow().clone().map_or(Ok(()), Err)
@@ -45,6 +58,7 @@ impl<'a, H: Host> ConfigView<'a, H> {
 pub struct Section<'a, H: Host> {
     view: &'a ConfigView<'a, H>,
     name: String,
+    registry: Option<String>,
 }
 
 impl<H: Host> Section<'_, H> {
@@ -95,8 +109,14 @@ impl<H: Host> Section<'_, H> {
     pub fn read_ares_bool(&self, key: &str, current: bool) -> bool {
         self.read(key, "ares-bool", current)
     }
+    pub fn read_ares_nullable_bool(&self, key: &str, current: Option<bool>) -> Option<bool> {
+        self.read(key, "ares-nullable-bool", current)
+    }
     pub fn read_double(&self, key: &str, current: f64) -> f64 {
         f64::from_bits(self.read(key, "double-bits", current.to_bits()))
+    }
+    pub fn read_ares_double_bits(&self, key: &str, current: u64) -> u64 {
+        self.read(key, "ares-double-bits", current)
     }
     pub fn read_phobos_nullable_int(&self, key: &str, current: Option<i32>) -> Option<i32> {
         self.read(key, "nullable-int", current)
@@ -113,6 +133,18 @@ impl<H: Host> Section<'_, H> {
     }
     pub fn read_name(&self, key: &str, capacity: usize) -> Option<String> {
         self.read(key, &format!("name:{capacity}"), None::<String>)
+    }
+    pub fn read_ares_registered_name(
+        &self,
+        key: &str,
+        current: Option<String>,
+        registry: &str,
+    ) -> Option<String> {
+        let reader = match &self.registry {
+            Some(scope) => format!("ares-ref:{registry}@{scope}"),
+            None => format!("ares-ref:{registry}"),
+        };
+        self.read(key, &reader, current)
     }
     pub fn read_list(&self, key: &str, capacity: usize) -> Option<Vec<String>> {
         self.read(key, &format!("list:{capacity}"), None::<Vec<String>>)

@@ -50,3 +50,23 @@ impl Default for AffectedHouse {
         Self::ALL
     }
 }
+
+/// Ares WarheadExt10051B70's ownership precedence, shared with the legacy
+/// engine adapter. Alliance facts come from the host's existing House owner.
+pub fn permits_house(
+    source_exists: bool,
+    source_is_owner: bool,
+    source_is_ally: bool,
+    affects_allies: bool,
+    affects_enemies: bool,
+    affects_owner: Option<bool>,
+) -> bool {
+    !source_exists
+        || if source_is_owner && affects_owner.is_some() {
+            affects_owner.expect("present owner override")
+        } else if source_is_ally {
+            affects_allies
+        } else {
+            affects_enemies
+        }
+}

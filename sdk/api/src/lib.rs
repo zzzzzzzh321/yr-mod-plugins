@@ -1,10 +1,19 @@
 //! Messages shared by the engine host and external gameplay components.
 //! All persistent component data is returned to the host as bounded bytes.
 
+mod effects;
+mod match_rules;
 pub mod native_string;
 pub mod relationship;
 mod resource;
 pub mod timer;
+pub use effects::{
+    EffectAction, EffectContext, EffectControl, EffectDescriptor, EffectEvent, EffectInstanceView,
+    EffectPlan, EffectResourceContext, EffectResourceKind,
+};
+pub use match_rules::{
+    CloakRuntimePolicy, EffectRuntimePolicy, MatchRulesContext, MatchRulesPolicy, SurvivalRule,
+};
 
 pub use resource::{
     DepletedWeaponPolicy, InputPolicy, ReloadPolicy, TypeResourceContext, TypeResourcePolicy,
@@ -40,6 +49,9 @@ pub enum HookKind {
     Tick,
     WeaponResource,
     TypeResource,
+    MatchRules,
+    EffectResource,
+    Effects,
 }
 
 impl HookKind {
@@ -51,6 +63,9 @@ impl HookKind {
             Self::Tick => "tick",
             Self::WeaponResource => "weapon_resource",
             Self::TypeResource => "type_resource",
+            Self::MatchRules => "match_rules",
+            Self::EffectResource => "effect_resource",
+            Self::Effects => "effects",
         }
     }
 }
@@ -148,6 +163,9 @@ pub enum Context {
     Tick(TickContext),
     WeaponResource(WeaponResourceContext),
     TypeResource(TypeResourceContext),
+    MatchRules(MatchRulesContext),
+    EffectResource(EffectResourceContext),
+    Effects(EffectContext),
 }
 
 impl Context {
@@ -159,6 +177,9 @@ impl Context {
             Self::Tick(_) => HookKind::Tick,
             Self::WeaponResource(_) => HookKind::WeaponResource,
             Self::TypeResource(_) => HookKind::TypeResource,
+            Self::MatchRules(_) => HookKind::MatchRules,
+            Self::EffectResource(_) => HookKind::EffectResource,
+            Self::Effects(_) => HookKind::Effects,
         }
     }
 }
@@ -193,6 +214,13 @@ pub struct Plan {
     /// Optional immutable type policy; older guests omit this field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub type_resource: Option<TypeResourcePolicy>,
+    /// Optional API v1 capability, declared by the match_rules manifest hook.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub match_rules: Option<MatchRulesPolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effect_resource: Option<EffectDescriptor>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effects: Option<EffectPlan>,
 }
 
 impl Plan {
@@ -206,6 +234,9 @@ impl Plan {
             projection: None,
             weapon_resource: None,
             type_resource: None,
+            match_rules: None,
+            effect_resource: None,
+            effects: None,
         }
     }
 }
@@ -267,6 +298,10 @@ impl ModuleManifest {
         if hooks.is_empty() || hooks.len() != self.hooks.len() {
             return Err("invalid module hook list".into());
         }
+        if self.hooks.contains(&HookKind::EffectResource) != self.hooks.contains(&HookKind::Effects)
+        {
+            return Err("effect resources and their runtime must be declared together".into());
+        }
         Ok(())
     }
 }
@@ -279,9 +314,14 @@ impl Request {
         if self.state.len() > MAX_STATE_BYTES || self.config.len() > MAX_CONFIG_BYTES {
             return Err("component input state/config exceeds its limit".into());
         }
-        if let Context::TypeResource(context) = &self.context
+        let user = match &self.context {
+            Context::TypeResource(context) => Some(context.user),
+            Context::Effects(context) => Some(context.user),
+            _ => None,
+        };
+        if let Some(user) = user
             && !matches!(
-                context.user,
+                user,
                 WEAPON_USER_UNIT
                     | WEAPON_USER_INFANTRY
                     | WEAPON_USER_BUILDING
@@ -300,6 +340,9 @@ impl Request {
             Context::Tick(c) => Some(c.entity.id),
             Context::WeaponResource(_) => None,
             Context::TypeResource(_) => None,
+            Context::MatchRules(_) => None,
+            Context::EffectResource(_) => None,
+            Context::Effects(context) => Some(context.entity.id),
         }
     }
 }
@@ -346,6 +389,8 @@ impl Plan {
                 || policy.reload.is_none()
                     && policy.depleted_weapon.is_none()
                     && policy.input.is_none()
+                    && policy.keep_alive.is_none()
+                    && policy.cloak_allowed.is_none()
                 || policy.depleted_weapon.is_some_and(|p| p.weapon_index < 0)
             {
                 return Err("invalid type resource policy or hook".into());
@@ -353,10 +398,35 @@ impl Plan {
         }
         if matches!(
             request.context.kind(),
-            HookKind::WeaponResource | HookKind::TypeResource
-        ) && (!self.state.is_empty() || self.projection.is_some() || !self.operations.is_empty())
+            HookKind::WeaponResource
+                | HookKind::TypeResource
+                | HookKind::MatchRules
+                | HookKind::EffectResource
+        ) && (!self.state.is_empty()
+            || self.projection.is_some()
+            || !self.operations.is_empty()
+            || self.effects.is_some())
         {
             return Err("resource queries cannot write entity state or presentation".into());
+        }
+        if self.match_rules.is_some() && request.context.kind() != HookKind::MatchRules {
+            return Err("only match_rules may select match-wide rules".into());
+        }
+        if self.effect_resource.is_some() && request.context.kind() != HookKind::EffectResource {
+            return Err("only effect_resource may define an effect resource".into());
+        }
+        if let Some(plan) = &self.effects {
+            let Context::Effects(context) = &request.context else {
+                return Err("only effects may mutate effect instances".into());
+            };
+            plan.validate(context)?;
+        }
+        if request.context.kind() == HookKind::Effects
+            && (!self.state.is_empty() || self.projection.is_some() || !self.operations.is_empty())
+        {
+            return Err(
+                "effect runtime uses the host instance store, not opaque entity state".into(),
+            );
         }
         if self.operations.len() > MAX_OPERATIONS {
             return Err("component operation count exceeds its limit".into());
@@ -427,6 +497,8 @@ mod tests {
                 threshold: 2,
             }),
             input: None,
+            keep_alive: None,
+            cloak_allowed: None,
         });
         plan.validate_for(&request).unwrap();
         plan.type_resource.as_mut().unwrap().users = WEAPON_USER_AIRCRAFT;

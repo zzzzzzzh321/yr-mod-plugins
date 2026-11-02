@@ -67,6 +67,15 @@ pub struct TypeResourcePolicy {
     /// destruction keep their existing owners and are not blocked by this.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub input: Option<InputPolicy>,
+    /// Optional survival contribution. None uses the canonical type default
+    /// under an explicitly selected tracked-presence match rule; false is an
+    /// explicit exclusion. A match-rules hook is required to own this field.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_alive: Option<bool>,
+    /// Type capability, independent of temporary/permanent cloak grants.
+    /// Some(true) explicitly restores retail permission on a disabled module.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cloak_allowed: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -79,6 +88,17 @@ pub struct InputPolicy {
 }
 
 impl TypeResourcePolicy {
+    pub const fn empty(users: u8) -> Self {
+        Self {
+            users,
+            reload: None,
+            depleted_weapon: None,
+            input: None,
+            keep_alive: None,
+            cloak_allowed: None,
+        }
+    }
+
     pub fn applies_to(self, user: u8) -> bool {
         self.users & user != 0
     }
@@ -93,6 +113,8 @@ mod tests {
         let old = r#"{"users":1,"reload":null,"depleted_weapon":null}"#;
         let mut policy: TypeResourcePolicy = serde_json::from_str(old).unwrap();
         assert_eq!(policy.input, None);
+        assert_eq!(policy.keep_alive, None);
+        assert_eq!(policy.cloak_allowed, None);
         assert_eq!(serde_json::to_string(&policy).unwrap(), old);
         policy.input = Some(InputPolicy {
             deny_manual_attack: true,
@@ -102,6 +124,25 @@ mod tests {
             serde_json::from_slice::<TypeResourcePolicy>(&serde_json::to_vec(&policy).unwrap())
                 .unwrap(),
             policy
+        );
+        policy.keep_alive = Some(false);
+        policy.cloak_allowed = Some(false);
+        let bytes = serde_json::to_vec(&policy).unwrap();
+        assert!(
+            std::str::from_utf8(&bytes)
+                .unwrap()
+                .contains("\"keep_alive\":false")
+        );
+        assert!(
+            std::str::from_utf8(&bytes)
+                .unwrap()
+                .contains("\"cloak_allowed\":false")
+        );
+        assert_eq!(
+            serde_json::from_slice::<TypeResourcePolicy>(&bytes)
+                .unwrap()
+                .keep_alive,
+            Some(false)
         );
     }
 
