@@ -2,21 +2,31 @@
 //! All persistent component data is returned to the host as bounded bytes.
 
 mod armor;
+mod configuration;
 mod effects;
 mod match_rules;
 pub mod native_string;
+mod production;
 pub mod relationship;
 mod resource;
 pub mod timer;
 pub use armor::{
     ArmorObjectKind, ArmorResourceContext, ArmorResourcePolicy, ArmorVersePolicy, BASE_ARMOR_NAMES,
 };
+pub use configuration::{ConfigurationBoundary, ConfigureBoundaryContext};
 pub use effects::{
     EffectAction, EffectContext, EffectControl, EffectDescriptor, EffectEvent, EffectInstanceView,
     EffectPlan, EffectResourceContext, EffectResourceKind,
 };
 pub use match_rules::{
     CloakRuntimePolicy, EffectRuntimePolicy, MatchRulesContext, MatchRulesPolicy, SurvivalRule,
+};
+pub use production::{
+    BASE_PRODUCTION_GROUPS, ProductionBuildLimitRule, ProductionGroup, ProductionObjectKind,
+    ProductionObjectPolicy, ProductionPrerequisiteRule, ProductionReadPoint, ProductionReadSite,
+    ProductionRegisteredType, ProductionRegistryPrefix, ProductionRegistryView,
+    ProductionRequirement, ProductionResourceContext, ProductionResourcePolicy,
+    ProductionSemantics, ProductionTypeRef,
 };
 
 pub use resource::{
@@ -57,6 +67,8 @@ pub enum HookKind {
     EffectResource,
     Effects,
     ArmorResource,
+    ProductionResource,
+    ConfigureBoundary,
 }
 
 impl HookKind {
@@ -72,6 +84,8 @@ impl HookKind {
             Self::EffectResource => "effect_resource",
             Self::Effects => "effects",
             Self::ArmorResource => "armor_resource",
+            Self::ProductionResource => "production_resource",
+            Self::ConfigureBoundary => "configure_boundary",
         }
     }
 }
@@ -173,6 +187,8 @@ pub enum Context {
     EffectResource(EffectResourceContext),
     Effects(EffectContext),
     ArmorResource(ArmorResourceContext),
+    ProductionResource(ProductionResourceContext),
+    ConfigureBoundary(ConfigureBoundaryContext),
 }
 
 impl Context {
@@ -188,6 +204,8 @@ impl Context {
             Self::EffectResource(_) => HookKind::EffectResource,
             Self::Effects(_) => HookKind::Effects,
             Self::ArmorResource(_) => HookKind::ArmorResource,
+            Self::ProductionResource(_) => HookKind::ProductionResource,
+            Self::ConfigureBoundary(_) => HookKind::ConfigureBoundary,
         }
     }
 }
@@ -231,6 +249,8 @@ pub struct Plan {
     pub effects: Option<EffectPlan>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub armor_resource: Option<ArmorResourcePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub production_resource: Option<ProductionResourcePolicy>,
 }
 
 impl Plan {
@@ -248,6 +268,7 @@ impl Plan {
             effect_resource: None,
             effects: None,
             armor_resource: None,
+            production_resource: None,
         }
     }
 }
@@ -355,6 +376,7 @@ impl Request {
             Context::EffectResource(_) => None,
             Context::Effects(context) => Some(context.entity.id),
             Context::ArmorResource(_) => None,
+            Context::ProductionResource(_) | Context::ConfigureBoundary(_) => None,
         }
     }
 }
@@ -374,8 +396,13 @@ impl Plan {
         {
             return Err("component output state/config exceeds its limit".into());
         }
-        if self.config.is_some() && request.context.kind() != HookKind::Configure {
-            return Err("only configure may replace module configuration".into());
+        if self.config.is_some()
+            && !matches!(
+                request.context.kind(),
+                HookKind::Configure | HookKind::ConfigureBoundary
+            )
+        {
+            return Err("only configuration hooks may replace module configuration".into());
         }
         if self.damage.is_some() && request.context.kind() != HookKind::Damage {
             return Err("only damage may replace receiver damage".into());
@@ -415,6 +442,8 @@ impl Plan {
                 | HookKind::MatchRules
                 | HookKind::EffectResource
                 | HookKind::ArmorResource
+                | HookKind::ProductionResource
+                | HookKind::ConfigureBoundary
         ) && (!self.state.is_empty()
             || self.projection.is_some()
             || !self.operations.is_empty()
@@ -431,6 +460,12 @@ impl Plan {
         if let Some(policy) = &self.armor_resource {
             let Context::ArmorResource(context) = &request.context else {
                 return Err("only armor_resource may define an armor resource".into());
+            };
+            policy.validate_for(context)?;
+        }
+        if let Some(policy) = &self.production_resource {
+            let Context::ProductionResource(context) = &request.context else {
+                return Err("only production_resource may define production resources".into());
             };
             policy.validate_for(context)?;
         }
@@ -492,6 +527,70 @@ pub struct DamageKernelInput {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn production_resources_and_configuration_boundaries_reject_cross_domain_writes() {
+        let mut groups = BASE_PRODUCTION_GROUPS
+            .into_iter()
+            .map(|name| ProductionGroup {
+                name: name.into(),
+                members: vec![],
+                alternates: vec![],
+            })
+            .collect::<Vec<_>>();
+        // Native source bytes are widened to characters; UTF-8 byte length
+        // must not reject a valid31-source-byte retained identity.
+        groups.push(ProductionGroup {
+            name: "\u{e9}".repeat(31),
+            members: vec![],
+            alternates: vec![],
+        });
+        let mut request = Request {
+            api_version: API_VERSION,
+            context: Context::ProductionResource(ProductionResourceContext::Catalog),
+            config: vec![],
+            state: vec![],
+        };
+        let mut plan = Plan::unchanged(&request);
+        plan.production_resource = Some(ProductionResourcePolicy::Catalog {
+            groups,
+            semantics: ProductionSemantics::default(),
+            ai_bypass_build_limit: [false; 3],
+        });
+        plan.validate_for(&request).unwrap();
+        let Some(ProductionResourcePolicy::Catalog { groups, .. }) = &mut plan.production_resource
+        else {
+            unreachable!()
+        };
+        groups[0].members.push(ProductionRequirement::Group(99));
+        assert!(plan.validate_for(&request).is_err());
+        request.context = Context::ProductionResource(ProductionResourceContext::Object {
+            category: ProductionObjectKind::Unit,
+            name: "TANK".into(),
+        });
+        assert!(
+            plan.validate_for(&request).is_err(),
+            "Catalog cannot answer an Object query"
+        );
+        plan.production_resource = Some(ProductionResourcePolicy::Object {
+            policy: ProductionObjectPolicy::default(),
+        });
+        plan.validate_for(&request).unwrap();
+        plan.state.push(1);
+        assert!(plan.validate_for(&request).is_err());
+        plan.state.clear();
+        plan.production_resource = None;
+        request.context = Context::ConfigureBoundary(ConfigureBoundaryContext {
+            boundary: ConfigurationBoundary::TypeReset,
+        });
+        plan.config = Some(vec![]);
+        plan.validate_for(&request).unwrap();
+        plan.state.push(1);
+        assert!(
+            plan.validate_for(&request).is_err(),
+            "configuration boundaries cannot write actor state"
+        );
+    }
 
     #[test]
     fn type_resource_queries_limit_aircraft_reload_and_reject_state_writes() {

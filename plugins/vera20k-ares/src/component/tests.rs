@@ -2,7 +2,7 @@
 use super::*;
 use vera_mod_api::{DamageKernelInput, TypeResourceContext};
 
-struct FrozenHost;
+pub(super) struct FrozenHost;
 impl Host for FrozenHost {
     fn config(&self, _: &str, _: &str) -> Option<String> {
         panic!("live INI read")
@@ -63,6 +63,12 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
                 .collect(),
         })
     );
+    let production = Context::ProductionResource(vera_mod_api::ProductionResourceContext::Catalog);
+    assert!(
+        query(vec![], production.clone())
+            .production_resource
+            .is_some()
+    );
     assert!(
         query(
             vec![],
@@ -91,6 +97,11 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
     );
     assert!(query(bytes.clone(), weapon).weapon_resource.is_none());
     assert!(query(bytes.clone(), armor).armor_resource.is_none());
+    assert!(
+        query(bytes.clone(), production)
+            .production_resource
+            .is_none()
+    );
     let old_type = query(bytes, object).type_resource.unwrap();
     assert!(old_type.reload.is_none() && old_type.depleted_weapon.is_none());
     assert!(old_type.input.is_none() && old_type.keep_alive.is_none());
@@ -403,7 +414,7 @@ fn configure_survival(config: Vec<u8>, disabled: bool) -> Vec<u8> {
     plan.config.unwrap()
 }
 
-fn frozen_query(config: &[u8], context: Context) -> Plan {
+pub(super) fn frozen_query(config: &[u8], context: Context) -> Plan {
     let request = Request {
         api_version: API_VERSION,
         context,
@@ -503,6 +514,10 @@ impl Host for CompositeConfigHost {
         reader: &str,
         current: &[u8],
     ) -> Result<Vec<u8>, String> {
+        if reader == "rules-registry-view" {
+            return serde_json::to_vec(&vera_mod_api::ProductionRegistryView::default())
+                .map_err(|e| e.to_string());
+        }
         match (section, key, reader) {
             ("VeraFeatures", "Shield", "bool") => Ok(b"true".to_vec()),
             ("VeraFeatures", "AresAttachEffect", "bool") => {
@@ -786,6 +801,10 @@ impl Host for ArmorConfigHost {
         reader: &str,
         current: &[u8],
     ) -> Result<Vec<u8>, String> {
+        if reader == "rules-registry-view" {
+            return serde_json::to_vec(&vera_mod_api::ProductionRegistryView::default())
+                .map_err(|e| e.to_string());
+        }
         if reader == "verse-token" {
             assert!(section.is_empty() && key.is_empty());
             let token: String = serde_json::from_slice(current).unwrap();

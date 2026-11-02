@@ -1,7 +1,7 @@
 //! Narrow configuration and numeric imports. No guest file, clock, or network access.
 use serde::{Serialize, de::DeserializeOwned};
 use std::cell::RefCell;
-use vera_mod_api::{ArmorVersePolicy, DamageKernelInput};
+use vera_mod_api::{ArmorVersePolicy, DamageKernelInput, ProductionRegistryView};
 
 pub trait Host {
     fn config(&self, section: &str, key: &str) -> Option<String>;
@@ -49,6 +49,14 @@ impl<'a, H: Host> ConfigView<'a, H> {
     /// include types allocated by references, not just an INI list's keys.
     pub fn registered_names(&self, registry: &str) -> Vec<String> {
         self.host.registry(registry)
+    }
+    /// Shared physical read points and native identities, without interpreted
+    /// gameplay fields. A missing/invalid view rejects configuration.
+    pub fn rules_registry_view(&self) -> Result<ProductionRegistryView, String> {
+        let bytes = self
+            .host
+            .config_read("", "", "rules-registry-view", b"null")?;
+        serde_json::from_slice(&bytes).map_err(|e| format!("rules registry view: {e}"))
     }
     /// Decode one already-tokenized verse through the host's canonical Ares
     /// parser100523E0. No section lookup or guest numeric parser is involved.
@@ -170,6 +178,9 @@ impl<H: Host> Section<'_, H> {
     /// token; callers choose it separately from the whitespace-tokenizing list.
     pub fn read_comma_list(&self, key: &str, capacity: usize) -> Option<Vec<String>> {
         self.read(key, &format!("comma-list:{capacity}"), None::<Vec<String>>)
+    }
+    pub fn read_bool_prefix_reverse3(&self, key: &str, current: [bool; 3]) -> [bool; 3] {
+        self.read(key, "bool-prefix-reverse3", current)
     }
     pub fn read_int_list(&self, key: &str) -> Option<Vec<i32>> {
         self.read(key, "int-list", None::<Vec<i32>>)

@@ -4,6 +4,7 @@ use crate::{
     features::{
         defense::{armor, shield},
         houses::survival,
+        production,
         units::{attach_effect, cloak, manual_control},
         weapons::{ammo_cost, empty_weapon, reload},
     },
@@ -26,6 +27,7 @@ struct Features {
     ares_keep_alive: bool,
     ares_attach_effect: bool,
     ares_armor: bool,
+    ares_production: bool,
 }
 
 impl Features {
@@ -42,6 +44,7 @@ impl Features {
             ares_keep_alive: true,
             ares_attach_effect: true,
             ares_armor: true,
+            ares_production: true,
             ..Self::default()
         }
     }
@@ -57,6 +60,7 @@ impl Features {
         self.ares_keep_alive = section.read_bool("AresKeepAlive", self.ares_keep_alive);
         self.ares_attach_effect = section.read_bool("AresAttachEffect", self.ares_attach_effect);
         self.ares_armor = section.read_bool("AresArmor", self.ares_armor);
+        self.ares_production = section.read_bool("AresProduction", self.ares_production);
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -86,15 +90,17 @@ pub(crate) struct Configuration {
     cloak: cloak::Configuration,
     #[serde(default)]
     armor: armor::Configuration,
+    #[serde(default)]
+    production: production::Configuration,
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.9.0".into(),
+        version: "0.10.0".into(),
         state_version: 1,
-        config_version: 9,
+        config_version: 10,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -106,6 +112,8 @@ pub fn manifest() -> ModuleManifest {
             HookKind::EffectResource,
             HookKind::Effects,
             HookKind::ArmorResource,
+            HookKind::ProductionResource,
+            HookKind::ConfigureBoundary,
         ],
     }
 }
@@ -124,6 +132,29 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
 pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, String> {
     request.validate()?;
     let mut config = decode_config(&request.config)?;
+    if let Context::ConfigureBoundary(context) = &request.context {
+        // Fresh configuration boundaries precede feature validation. Saved
+        // programs keep their exact frozen bytes and never replay this path.
+        let production = match context.boundary {
+            vera_mod_api::ConfigurationBoundary::ScenarioClear => {
+                production::Configuration::default()
+            }
+            vera_mod_api::ConfigurationBoundary::TypeReset => {
+                let mut retained = std::mem::take(&mut config.production);
+                retained.reset_types();
+                retained
+            }
+        };
+        config = Configuration {
+            features: Features::for_new_match(),
+            production,
+            ..Configuration::default()
+        };
+        let mut plan = Plan::unchanged(request);
+        plan.state.clear();
+        plan.config = Some(serde_json::to_vec(&config).map_err(|e| e.to_string())?);
+        return Ok(plan);
+    }
     if let Context::Configure(context) = &request.context {
         let view = ConfigView::new(host);
         config.features.apply_pass(&view);
@@ -134,6 +165,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         // Armor identity and inheritance also belong to each reached physical
         // read, including layers before the module is enabled.
         config.armor.configure(context, &view);
+        config.production.configure(context, &view)?;
         if context.final_pass {
             config.features.validate()?;
             if config.features.ares_ammo {
@@ -163,6 +195,15 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
     }
     config.features.validate()?;
     match &request.context {
+        Context::ConfigureBoundary(_) => unreachable!("handled before feature validation"),
+        Context::ProductionResource(context) => {
+            let mut plan = Plan::unchanged(request);
+            plan.state.clear();
+            if config.features.ares_production {
+                plan.production_resource = Some(config.production.query(context));
+            }
+            Ok(plan)
+        }
         Context::ArmorResource(context) => {
             let mut plan = Plan::unchanged(request);
             plan.state.clear();
@@ -284,5 +325,7 @@ pub(crate) fn freeze_shield(shield: shield::Configuration, overload: bool) -> Ve
     .unwrap()
 }
 
+#[cfg(test)]
+mod production_tests;
 #[cfg(test)]
 mod tests;
