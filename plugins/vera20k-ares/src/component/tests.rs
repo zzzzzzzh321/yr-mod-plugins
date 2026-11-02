@@ -41,6 +41,11 @@ fn ammunition_uses_frozen_configuration_and_excludes_aircraft() {
         assert_eq!((policy.cost, policy.reload_after_use), (cost, cost > 0));
         assert!(policy.applies_to(vera_mod_api::WEAPON_USER_UNIT));
         assert!(!policy.applies_to(vera_mod_api::WEAPON_USER_AIRCRAFT));
+        assert_eq!(
+            serde_json::to_value(policy).unwrap()["use_weapon_rof"],
+            true,
+            "the Ares ammo chain must bypass the stock loaded-building shortcut"
+        );
         assert!(plan.state.is_empty() && plan.projection.is_none());
     }
 }
@@ -77,6 +82,74 @@ fn type_policies_are_frozen_independent_and_exclude_aircraft_reload_only() {
     assert!(plane.type_resource.unwrap().depleted_weapon.is_some());
     config["features"]["ares_reload"] = serde_json::json!(false);
     config["features"]["ares_no_ammo_weapon"] = serde_json::json!(false);
+    request.config = serde_json::to_vec(&config).unwrap();
+    assert!(
+        evaluate(&request, &FrozenHost)
+            .unwrap()
+            .type_resource
+            .is_none()
+    );
+}
+
+#[test]
+fn manual_input_is_frozen_class_scoped_and_independently_disabled() {
+    use vera_mod_api::{
+        InputPolicy, WEAPON_USER_AIRCRAFT, WEAPON_USER_BUILDING, WEAPON_USER_INFANTRY,
+        WEAPON_USER_UNIT,
+    };
+    let mut config = serde_json::to_value(Configuration::default()).unwrap();
+    config["features"]["ares_manual_control"] = serde_json::json!(true);
+    config["manual_control"] = serde_json::json!({"policies":{"TEST":{
+        "deny_manual_attack":true,"deny_manual_unload":true,
+        "hide_transport_entry":true,"deny_self_guard_area":true
+    }}});
+    let mut request = Request {
+        api_version: API_VERSION,
+        context: Context::TypeResource(TypeResourceContext {
+            type_name: "TEST".into(),
+            user: WEAPON_USER_UNIT,
+        }),
+        config: serde_json::to_vec(&config).unwrap(),
+        state: vec![],
+    };
+    for user in [
+        WEAPON_USER_UNIT,
+        WEAPON_USER_INFANTRY,
+        WEAPON_USER_BUILDING,
+        WEAPON_USER_AIRCRAFT,
+    ] {
+        request.context = Context::TypeResource(TypeResourceContext {
+            type_name: "TEST".into(),
+            user,
+        });
+        let plan = evaluate(&request, &FrozenHost).unwrap();
+        plan.validate_for(&request).unwrap();
+        let policy = plan.type_resource.unwrap();
+        assert_eq!(
+            policy.input,
+            Some(InputPolicy {
+                deny_manual_attack: true,
+                deny_manual_unload: matches!(user, WEAPON_USER_UNIT | WEAPON_USER_AIRCRAFT),
+                hide_transport_entry: true,
+                deny_self_guard_area: user == WEAPON_USER_INFANTRY,
+            })
+        );
+        assert!(policy.reload.is_none() && policy.depleted_weapon.is_none());
+    }
+    request.context = Context::TypeResource(TypeResourceContext {
+        type_name: "UNCONFIGURED".into(),
+        user: WEAPON_USER_UNIT,
+    });
+    assert_eq!(
+        evaluate(&request, &FrozenHost)
+            .unwrap()
+            .type_resource
+            .unwrap()
+            .input,
+        Some(InputPolicy::default()),
+        "enabled feature owns false decisions on restore too"
+    );
+    config["features"]["ares_manual_control"] = serde_json::json!(false);
     request.config = serde_json::to_vec(&config).unwrap();
     assert!(
         evaluate(&request, &FrozenHost)

@@ -39,6 +39,10 @@ impl Ammunition {
             // https://ares-developers.github.io/Ares-docs/new/weapons/ammo.html
             // explicitly excludes AircraftTypes; release retains its own debit.
             users: WEAPON_USER_UNIT | WEAPON_USER_INFANTRY | WEAPON_USER_BUILDING,
+            // Ares GetROF_BuildingHack10047A60, installed6FCFA4, skips the
+            // loaded-building one-frame shortcut. The host still owns normal
+            // ROF, burst, modifiers, random draws and the rearm timer.
+            use_weapon_rof: true,
         }
     }
 }

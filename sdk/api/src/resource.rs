@@ -26,6 +26,15 @@ pub struct WeaponResourcePolicy {
     pub cost: i32,
     pub reload_after_use: bool,
     pub users: u8,
+    /// Use the ordinary weapon rearm calculation for a loaded building,
+    /// instead of the retail one-frame magazine shortcut. Missing on older
+    /// guests means retail cadence; counts/timers still belong to the host.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub use_weapon_rof: bool,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 impl WeaponResourcePolicy {
@@ -54,10 +63,59 @@ pub struct TypeResourcePolicy {
     pub users: u8,
     pub reload: Option<ReloadPolicy>,
     pub depleted_weapon: Option<DepletedWeaponPolicy>,
+    /// Local input/cursor admission only. Simulation orders, AI, cargo and
+    /// destruction keep their existing owners and are not blocked by this.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub input: Option<InputPolicy>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct InputPolicy {
+    pub deny_manual_attack: bool,
+    pub deny_manual_unload: bool,
+    pub hide_transport_entry: bool,
+    pub deny_self_guard_area: bool,
 }
 
 impl TypeResourcePolicy {
     pub fn applies_to(self, user: u8) -> bool {
         self.users & user != 0
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_type_policy_omits_input_and_new_input_round_trips() {
+        let old = r#"{"users":1,"reload":null,"depleted_weapon":null}"#;
+        let mut policy: TypeResourcePolicy = serde_json::from_str(old).unwrap();
+        assert_eq!(policy.input, None);
+        assert_eq!(serde_json::to_string(&policy).unwrap(), old);
+        policy.input = Some(InputPolicy {
+            deny_manual_attack: true,
+            ..Default::default()
+        });
+        assert_eq!(
+            serde_json::from_slice::<TypeResourcePolicy>(&serde_json::to_vec(&policy).unwrap())
+                .unwrap(),
+            policy
+        );
+    }
+
+    #[test]
+    fn old_weapon_policy_keeps_retail_cadence_and_new_policy_round_trips() {
+        let old = r#"{"cost":2,"reload_after_use":true,"users":7}"#;
+        let mut policy: WeaponResourcePolicy = serde_json::from_str(old).unwrap();
+        assert!(!policy.use_weapon_rof);
+        assert_eq!(serde_json::to_string(&policy).unwrap(), old);
+        policy.use_weapon_rof = true;
+        let bytes = serde_json::to_vec(&policy).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<WeaponResourcePolicy>(&bytes).unwrap(),
+            policy
+        );
     }
 }

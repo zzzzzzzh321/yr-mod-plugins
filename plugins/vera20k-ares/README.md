@@ -15,7 +15,7 @@ This plugin is maintained in the independent `plugin-dev` project at
 dependencies and the packager; the runtime stays in the engine. The Cargo package is
 `vera20k-ares`, its raw core artifact is `vera20k_ares.wasm`, and its publication
 filename is `vera20k-ares.wasm`. The internal `vera.reference-gameplay` identity,
-version 0.4.1, config_version=4 and state_version=1. The filename
+version 0.5.0, config_version=5 and state_version=1. The filename
 does not claim complete Ares compatibility; the retained Phobos-compatible
 shield and authored overload remain examples in this first plugin.
 
@@ -39,7 +39,7 @@ see the [Chinese lab guide](examples/sdk-lab/README.zh-CN.md).
 - `tick` owns recovery, powered/temporal pause behavior and cleanup.
 - Each plan also returns generic meter/tint presentation data.
 - `weapon_resource` returns immutable weapon-cost decisions;
-  `type_resource` returns immutable per-type reload and low-ammo weapon policies.
+  `type_resource` returns immutable per-type reload, low-ammo weapon and local input policies.
   Both queries run at admission and are rebuilt from saved frozen configuration.
   The original ammo owner, reload clock and canonical weapon selector consume
   these policies; the component does not hold duplicate ammo state.
@@ -49,6 +49,7 @@ Code is grouped by domain and complete mechanism:
 ```text
 src/features/
 ├─ defense/shield/           # configuration, state, damage and recovery
+├─ units/manual_control.rs  # NoManualFire/Unload/Enter, NoSelfGuardArea
 └─ weapons/
    ├─ ammo_cost.rs           # weapon Ammo cost
    ├─ reload.rs              # ReloadAmount / EmptyReloadAmount
@@ -58,6 +59,10 @@ src/features/
 Every feature uses the same `src/support/host.rs` facade and configuration
 readers. Shared static query/policy types live in `sdk/api/src/resource.rs`;
 `type_resource` adds no Host service or WIT import.
+
+`[VeraFeatures] AresManualControl=yes` enables the four Ares manual-action tags.
+See the [Chinese guide](MANUAL.zh-CN.md) and [INI example](examples/manual-control.ini).
+These policies change local action admission; they do not add simulation order filters.
 
 Persistent state and configuration are opaque, bounded host-managed bytes.
 Every floating-point configuration value is encoded as its IEEE-754 bits.
@@ -97,15 +102,16 @@ Overload=no
 AresAmmo=yes
 AresReload=yes
 AresNoAmmoWeapon=yes
+AresManualControl=yes
 ```
 
-All switches default to no. Overload requires Shield; the three Ares switches
+All switches default to no. Overload requires Shield; the four Ares switches
 are independent. Existing `ShieldTypes`, `ShieldType`, weapon `Ammo` and
 per-type `ReloadAmount`, `EmptyReloadAmount`, `NoAmmoWeapon`, `NoAmmoAmount`
 settings retain their syntax. Layered selection
 is frozen with the configuration and saved/checksummed; it cannot change during
 a match. `examples/features.ini` shows the combined selection. The component
-identity is `vera.reference-gameplay` 0.4.0, config_version=4, state_version=1.
+identity is `vera.reference-gameplay` 0.5.0, config_version=5, state_version=1.
 Retained older component files keep their original behavior and identity.
 
 `ReloadAmount` defaults to 1 and `EmptyReloadAmount` defaults to the normal

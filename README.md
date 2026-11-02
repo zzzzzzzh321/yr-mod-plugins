@@ -1,6 +1,6 @@
 # VERA20K 插件开发工程
 
-本目录是后续外置功能插件的主要维护位置，与 `../engine` 相互独立。当前插件发布文件为 `vera20k-ares.wasm`，已有护盾、过载及 Ares 弹药、装填和低弹量选武器示例。
+本目录是后续外置功能插件的主要维护位置，与 `../engine` 相互独立。当前插件发布文件为 `vera20k-ares.wasm`，已有护盾、过载及 Ares 弹药、装填、低弹量选武器和手动操作限制示例。
 
 ```text
 plugin-dev/
@@ -50,4 +50,6 @@ cargo run --locked --release -p vera-mod-pack -- target/wasm32-unknown-unknown/r
 
 本工程迁自 VERA20K 本地源码提交 `314dfcbb5202a171d17edbd79fc1fab21d77e3f0`；原实现历史保留在引擎 Git 仓库。迁移保留文件内容、原有代码注释、贡献者说明和 GPL 许可，见 [LICENSE-GPL](LICENSE-GPL)。
 
-当前内部组件标识仍为 `vera.reference-gameplay`，组件版本 0.4.1、配置版本 4、状态版本 1。本工程使用独立本地 Git 管理，未经授权不上传或公开。
+Ares 全量兼容以[逐项兼容台账](compatibility/README.zh-CN.md)持续跟踪，包含官方功能、修复和参考入口；文件名不表示全量兼容已完成。
+
+当前内部组件标识仍为 `vera.reference-gameplay`，组件版本 0.5.0、配置版本 5、状态版本 1。本工程使用独立本地 Git 管理，未经授权不上传或公开。

@@ -92,6 +92,9 @@ impl<H: Host> Section<'_, H> {
     pub fn read_bool(&self, key: &str, current: bool) -> bool {
         self.read(key, "bool", current)
     }
+    pub fn read_ares_bool(&self, key: &str, current: bool) -> bool {
+        self.read(key, "ares-bool", current)
+    }
     pub fn read_double(&self, key: &str, current: f64) -> f64 {
         f64::from_bits(self.read(key, "double-bits", current.to_bits()))
     }

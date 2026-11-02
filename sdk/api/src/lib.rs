@@ -7,7 +7,7 @@ mod resource;
 pub mod timer;
 
 pub use resource::{
-    DepletedWeaponPolicy, ReloadPolicy, TypeResourceContext, TypeResourcePolicy,
+    DepletedWeaponPolicy, InputPolicy, ReloadPolicy, TypeResourceContext, TypeResourcePolicy,
     WEAPON_USER_AIRCRAFT, WEAPON_USER_BUILDING, WEAPON_USER_INFANTRY, WEAPON_USER_UNIT,
     WeaponResourceContext, WeaponResourcePolicy,
 };
@@ -343,7 +343,9 @@ impl Plan {
                 || policy.users == 0
                 || policy.users & !supported_users != 0
                 || policy.reload.is_some() && policy.users & WEAPON_USER_AIRCRAFT != 0
-                || policy.reload.is_none() && policy.depleted_weapon.is_none()
+                || policy.reload.is_none()
+                    && policy.depleted_weapon.is_none()
+                    && policy.input.is_none()
                 || policy.depleted_weapon.is_some_and(|p| p.weapon_index < 0)
             {
                 return Err("invalid type resource policy or hook".into());
@@ -424,6 +426,7 @@ mod tests {
                 weapon_index: 1,
                 threshold: 2,
             }),
+            input: None,
         });
         plan.validate_for(&request).unwrap();
         plan.type_resource.as_mut().unwrap().users = WEAPON_USER_AIRCRAFT;
@@ -432,6 +435,11 @@ mod tests {
             "automatic type reload excludes aircraft"
         );
         plan.type_resource.as_mut().unwrap().reload = None;
+        plan.type_resource.as_mut().unwrap().depleted_weapon = None;
+        plan.type_resource.as_mut().unwrap().input = Some(InputPolicy {
+            deny_manual_attack: true,
+            ..Default::default()
+        });
         request.context = Context::TypeResource(TypeResourceContext {
             type_name: "PLANE".into(),
             user: WEAPON_USER_AIRCRAFT,
@@ -461,6 +469,7 @@ mod tests {
             cost: 2,
             reload_after_use: true,
             users: WEAPON_USER_UNIT,
+            use_weapon_rof: false,
         });
         plan.validate_for(&request).unwrap();
         plan.weapon_resource.as_mut().unwrap().users = WEAPON_USER_AIRCRAFT;

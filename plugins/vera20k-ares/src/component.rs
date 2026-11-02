@@ -3,6 +3,7 @@
 use crate::{
     features::{
         defense::shield,
+        units::manual_control,
         weapons::{ammo_cost, empty_weapon, reload},
     },
     support::{ConfigView, Host},
@@ -20,6 +21,7 @@ struct Features {
     ares_ammo: bool,
     ares_reload: bool,
     ares_no_ammo_weapon: bool,
+    ares_manual_control: bool,
 }
 
 impl Features {
@@ -30,6 +32,7 @@ impl Features {
         self.ares_ammo = section.read_bool("AresAmmo", self.ares_ammo);
         self.ares_reload = section.read_bool("AresReload", self.ares_reload);
         self.ares_no_ammo_weapon = section.read_bool("AresNoAmmoWeapon", self.ares_no_ammo_weapon);
+        self.ares_manual_control = section.read_bool("AresManualControl", self.ares_manual_control);
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -49,15 +52,17 @@ pub(crate) struct Configuration {
     ammunition: ammo_cost::Ammunition,
     reload: reload::Configuration,
     empty_weapon: empty_weapon::Configuration,
+    #[serde(default)]
+    manual_control: manual_control::Configuration,
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.4.1".into(),
+        version: "0.5.0".into(),
         state_version: 1,
-        config_version: 4,
+        config_version: 5,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -94,6 +99,9 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             if config.features.ares_no_ammo_weapon {
                 config.empty_weapon.configure(context, &view)?;
             }
+            if config.features.ares_manual_control {
+                config.manual_control.configure(context, &view);
+            }
         }
         // Always accumulate shield definitions: a later layer may enable them.
         config
@@ -123,11 +131,17 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                 .ares_no_ammo_weapon
                 .then(|| config.empty_weapon.policy(&context.type_name))
                 .flatten();
-            if reload.is_some() || depleted_weapon.is_some() {
+            let input = config.features.ares_manual_control.then(|| {
+                config
+                    .manual_control
+                    .policy(&context.type_name, context.user)
+            });
+            if reload.is_some() || depleted_weapon.is_some() || input.is_some() {
                 plan.type_resource = Some(vera_mod_api::TypeResourcePolicy {
                     users: context.user,
                     reload,
                     depleted_weapon,
+                    input,
                 });
             }
             Ok(plan)

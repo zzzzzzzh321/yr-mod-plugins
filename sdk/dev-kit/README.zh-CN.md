@@ -84,7 +84,7 @@ dist/release-new/
 
 ## SDK 与引擎版本
 
-当前接口为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识 `vera.reference-gameplay`、组件版本 `0.4.0`、配置版本 `4` 和状态版本 `1`。发布文件名仍为 `vera20k-ares.wasm`。
+当前接口为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识 `vera.reference-gameplay`、组件版本 `0.5.0`、配置版本 `5` 和状态版本 `1`。发布文件名仍为 `vera20k-ares.wasm`。0.5.0 需要能接收 `use_weapon_rof` 和可选 `input` 类型策略的宿主；旧宿主会拒绝未知字段，SDK 快照来源见 `sdk/source.json`。
 
 修改现有接口能够表达的算法，可以只重编插件。需要新的引擎能力时，应先扩展 SDK 契约和引擎接入点，再使用匹配的 SDK 构建插件；独立编译并不表示所有未来 SDK 与引擎版本自动兼容。
 

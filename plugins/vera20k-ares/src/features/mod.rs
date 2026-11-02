@@ -2,3 +2,4 @@
 //! Each feature owns its configuration/decisions; shared host imports live in support.
 pub(crate) mod defense;
 pub(crate) mod weapons;
+pub(crate) mod units;
