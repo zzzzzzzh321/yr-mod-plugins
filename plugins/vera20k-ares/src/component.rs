@@ -5,7 +5,7 @@ use crate::{
         defense::{armor, shield},
         houses::survival,
         production,
-        units::{attach_effect, cloak, emp, manual_control},
+        units::{attach_effect, cloak, emp, manual_control, spotlight},
         weapons::{ammo_cost, empty_weapon, reload},
     },
     support::{ConfigView, Host},
@@ -29,6 +29,7 @@ struct Features {
     ares_armor: bool,
     ares_production: bool,
     ares_emp: bool,
+    ares_spotlight: bool,
 }
 
 impl Features {
@@ -47,6 +48,7 @@ impl Features {
             ares_armor: true,
             ares_production: true,
             ares_emp: true,
+            ares_spotlight: true,
             ..Self::default()
         }
     }
@@ -64,6 +66,7 @@ impl Features {
         self.ares_armor = section.read_bool("AresArmor", self.ares_armor);
         self.ares_production = section.read_bool("AresProduction", self.ares_production);
         self.ares_emp = section.read_bool("AresEMP", self.ares_emp);
+        self.ares_spotlight = section.read_bool("AresSpotlight", self.ares_spotlight);
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -97,15 +100,17 @@ pub(crate) struct Configuration {
     production: production::Configuration,
     #[serde(default)]
     emp: emp::Configuration,
+    #[serde(default)]
+    spotlight: spotlight::Configuration,
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.11.0".into(),
+        version: "0.12.0".into(),
         state_version: 1,
-        config_version: 11,
+        config_version: 12,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -176,13 +181,15 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         // read, including layers before the module is enabled.
         config.armor.configure(context, &view);
         if !context.final_pass {
-            // Both domains consume the same read-only physical input; do not
+            // Resource domains consume the same read-only physical input; do not
             // transfer/deserialize its full catalog twice in one Rules pass.
             let physical = view.rules_registry_view()?;
             config.production.configure(&view, &physical)?;
             config.emp.configure(&view, &physical);
+            config.spotlight.configure(&view, &physical)?;
         }
         if context.final_pass {
+            config.spotlight.finalize(context);
             config.features.validate()?;
             if config.features.ares_ammo {
                 config.ammunition.configure(host, &view);
@@ -318,6 +325,11 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                 input,
                 keep_alive,
                 cloak_allowed: Some(cloak_allowed),
+                spotlight: Some(config.spotlight.query(
+                    &context.type_name,
+                    context.user,
+                    config.features.ares_spotlight,
+                )),
             });
             Ok(plan)
         }
@@ -351,5 +363,7 @@ pub(crate) fn freeze_shield(shield: shield::Configuration, overload: bool) -> Ve
 mod emp_tests;
 #[cfg(test)]
 mod production_tests;
+#[cfg(test)]
+mod spotlight_tests;
 #[cfg(test)]
 mod tests;

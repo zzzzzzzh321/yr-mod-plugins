@@ -57,6 +57,42 @@ pub struct DepletedWeaponPolicy {
     pub threshold: i32,
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SpotlightAttachment {
+    #[default]
+    Body,
+    Turret,
+    Barrel,
+}
+
+/// Immutable inputs for the existing host searchlight owner. Turning off type
+/// rules keeps the original building behavior; None on the containing resource
+/// preserves the legacy component/profile fallback.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpotlightPolicy {
+    pub has_spotlight: Option<bool>,
+    pub use_type_rules: bool,
+    pub start_height: i32,
+    pub distance: i32,
+    pub attached_to: SpotlightAttachment,
+    pub glow_flags: u8,
+}
+
+impl Default for SpotlightPolicy {
+    fn default() -> Self {
+        Self {
+            has_spotlight: None,
+            use_type_rules: false,
+            start_height: 430,
+            distance: 1024,
+            attached_to: SpotlightAttachment::Body,
+            glow_flags: 0,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TypeResourcePolicy {
@@ -76,6 +112,8 @@ pub struct TypeResourcePolicy {
     /// Some(true) explicitly restores retail permission on a disabled module.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cloak_allowed: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spotlight: Option<SpotlightPolicy>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -96,6 +134,7 @@ impl TypeResourcePolicy {
             input: None,
             keep_alive: None,
             cloak_allowed: None,
+            spotlight: None,
         }
     }
 
@@ -115,6 +154,7 @@ mod tests {
         assert_eq!(policy.input, None);
         assert_eq!(policy.keep_alive, None);
         assert_eq!(policy.cloak_allowed, None);
+        assert_eq!(policy.spotlight, None);
         assert_eq!(serde_json::to_string(&policy).unwrap(), old);
         policy.input = Some(InputPolicy {
             deny_manual_attack: true,

@@ -78,13 +78,13 @@ dist/release-new/
 └── vera-mod.json
 ```
 
-声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。正在集中验证的0.11.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`和`AresEMP`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
+声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.12.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`和`AresSpotlight`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
 
 如果设置了 `CARGO_TARGET_DIR`，原始 Wasm 的位置随之改变；打包命令中的输入路径也应使用该目标目录。源码修改和编译过程不会自动改变作品当前对局中的组件。
 
 ## SDK 与引擎版本
 
-接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.11.0开发分支使用配置版本11、状态版本1，尚未完成整批引擎验收，不能当作新的稳定交付。
+接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.12.0开发分支使用配置版本12、状态版本1，探照灯增量已完成集中验收，整体迁移尚未完成，也未替换保留交付。
 
 开发分支新增`match_rules`、`effect_resource`、`effects`、`armor_resource`、`production_resource`、`configure_boundary`和`emp_resource`可选能力，以及类型隐形许可等消息字段。宿主须提供物理Rules读取点的注册类型查询、效果实例事务、原数学/动画/隐形所有者和相应保存恢复接入；只认识原有回调的宿主无法运行这版组件。组件的护盾字节与宿主效果列表分别保存，效果列表只有一个所有者。宿主接收静态策略时建立派生缓存，每次效果更新只提交经校验的有序动作。护甲增量已通过关联回归及真实资源加载，整体迁移仍在进行。SDK快照的配套引擎来源提交见`sdk/source.json`。
 
@@ -111,3 +111,5 @@ cargo metadata --locked --offline --format-version 1
 生产扩展在 `features/production` 按组、工厂资格与公共目录索引组织；没有第二份 House 计数、工厂队列或永久计划。配置边界由宿主真实流程提供：普通场景清空，类型重建保留组件自身的全局控制，读取存档直接采用保存配置。跨场景种子必须匹配完全相同的组件内容与清单，更新组件后应开启新对局。0.10.0 普通引擎新增国家来源与计划字段，完整存档布局随之变化；旧存档保留相应旧引擎和组件，不自动转换。生产增量已通过关联回归、旧实现对照、正式读档和七种真实资源加载检查；整体迁移尚未完成。
 
 EMP 扩展位于 `features/units/emp`。新配置默认启用 `AresEMP`，历史冻结配置缺少该开关时保持关闭；`[VeraFeatures] AresEMP=no` 明确停用。插件只发布静态声明，计数、停用状态和动画引用仍只有原宿主所有者。任务名称、阈值和注册动画由共享 Host 调用原读取器，类型动画的继承／清空／指定三态不会合并。TypeReset 保留 EMP 全局任务配置；普通场景清空，读档使用保存配置。EMP 增量已通过关联行为、旧实现对照、正式读档和七种真实资源加载检查。完整存档新增触发器冻结策略，旧存档需保留对应旧引擎和组件；整体迁移继续进行。
+
+探照灯通过现有 `type_resource.spotlight` 发布静态声明，没有新增逐帧回调或灯光状态。新对局默认启用 `AresSpotlight`；关闭时恢复原版建筑灯规则。两套开关沿各自的物理读取时点累积，不能从最终合并文本重新猜测。原版 General 参数继续由宿主保留，颜色与几何交给原绘制链。本增量已通过关联行为、旧实现对照、应用资源加载、现有 GPU 像素对照和七种真实资源加载检查；原有绘制残差继续保留。

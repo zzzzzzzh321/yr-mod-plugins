@@ -3,3 +3,4 @@ pub(crate) mod attach_effect;
 pub(crate) mod cloak;
 pub(crate) mod emp;
 pub(crate) mod manual_control;
+pub(crate) mod spotlight;

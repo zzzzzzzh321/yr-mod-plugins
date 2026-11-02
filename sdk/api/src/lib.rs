@@ -34,9 +34,9 @@ pub use production::{
 };
 
 pub use resource::{
-    DepletedWeaponPolicy, InputPolicy, ReloadPolicy, TypeResourceContext, TypeResourcePolicy,
-    WEAPON_USER_AIRCRAFT, WEAPON_USER_BUILDING, WEAPON_USER_INFANTRY, WEAPON_USER_UNIT,
-    WeaponResourceContext, WeaponResourcePolicy,
+    DepletedWeaponPolicy, InputPolicy, ReloadPolicy, SpotlightAttachment, SpotlightPolicy,
+    TypeResourceContext, TypeResourcePolicy, WEAPON_USER_AIRCRAFT, WEAPON_USER_BUILDING,
+    WEAPON_USER_INFANTRY, WEAPON_USER_UNIT, WeaponResourceContext, WeaponResourcePolicy,
 };
 
 use serde::{Deserialize, Serialize};
@@ -444,7 +444,9 @@ impl Plan {
                     && policy.input.is_none()
                     && policy.keep_alive.is_none()
                     && policy.cloak_allowed.is_none()
+                    && policy.spotlight.is_none()
                 || policy.depleted_weapon.is_some_and(|p| p.weapon_index < 0)
+                || policy.spotlight.is_some_and(|p| p.glow_flags & !0x0f != 0)
             {
                 return Err("invalid type resource policy or hook".into());
             }
@@ -684,6 +686,7 @@ mod tests {
             input: None,
             keep_alive: None,
             cloak_allowed: None,
+            spotlight: None,
         });
         plan.validate_for(&request).unwrap();
         plan.type_resource.as_mut().unwrap().users = WEAPON_USER_AIRCRAFT;
@@ -702,6 +705,31 @@ mod tests {
             user: WEAPON_USER_AIRCRAFT,
         });
         plan.validate_for(&request).unwrap();
+        plan.type_resource.as_mut().unwrap().input = None;
+        plan.type_resource.as_mut().unwrap().spotlight = Some(SpotlightPolicy {
+            use_type_rules: true,
+            glow_flags: 15,
+            ..Default::default()
+        });
+        plan.validate_for(&request).unwrap();
+        plan.type_resource
+            .as_mut()
+            .unwrap()
+            .spotlight
+            .as_mut()
+            .unwrap()
+            .glow_flags = 16;
+        assert!(
+            plan.validate_for(&request).is_err(),
+            "unknown light channels are not admitted"
+        );
+        plan.type_resource
+            .as_mut()
+            .unwrap()
+            .spotlight
+            .as_mut()
+            .unwrap()
+            .glow_flags = 15;
         plan.state.push(1);
         assert!(plan.validate_for(&request).is_err());
         plan.state.clear();

@@ -53,6 +53,14 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
     );
     assert_eq!(policy.input, Some(vera_mod_api::InputPolicy::default()));
     assert!(policy.depleted_weapon.is_none());
+    assert_eq!(
+        policy.spotlight,
+        Some(vera_mod_api::SpotlightPolicy {
+            has_spotlight: Some(false),
+            use_type_rules: true,
+            ..Default::default()
+        })
+    );
     let armor = Context::ArmorResource(vera_mod_api::ArmorResourceContext::Catalog);
     assert_eq!(
         query(vec![], armor.clone()).armor_resource,
@@ -93,6 +101,7 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
     // an older producer omitted the feature selection field entirely.
     let mut historical = serde_json::to_value(Configuration::default()).unwrap();
     historical.as_object_mut().unwrap().remove("features");
+    historical.as_object_mut().unwrap().remove("spotlight");
     let bytes = serde_json::to_vec(&historical).unwrap();
     assert_eq!(
         query(
@@ -136,6 +145,10 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
     assert!(old_type.reload.is_none() && old_type.depleted_weapon.is_none());
     assert!(old_type.input.is_none() && old_type.keep_alive.is_none());
     assert_eq!(old_type.cloak_allowed, Some(true));
+    assert_eq!(
+        old_type.spotlight,
+        Some(vera_mod_api::SpotlightPolicy::default())
+    );
     let fresh = decode_config(&[]).unwrap();
     assert!(!fresh.features.shield && !fresh.features.overload);
 }
