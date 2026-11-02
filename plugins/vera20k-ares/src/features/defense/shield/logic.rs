@@ -230,6 +230,7 @@ pub(crate) fn evaluate<H: Host>(
         Context::WeaponResource(_)
         | Context::TypeResource(_)
         | Context::MatchRules(_)
+        | Context::ArmorResource(_)
         | Context::EffectResource(_)
         | Context::Effects(_) => {
             return Err("resource policy must use its own hook".into());

@@ -2,7 +2,7 @@
 //! one component; simulation only uses the frozen selection, never live INI.
 use crate::{
     features::{
-        defense::shield,
+        defense::{armor, shield},
         houses::survival,
         units::{attach_effect, cloak, manual_control},
         weapons::{ammo_cost, empty_weapon, reload},
@@ -25,6 +25,7 @@ struct Features {
     ares_manual_control: bool,
     ares_keep_alive: bool,
     ares_attach_effect: bool,
+    ares_armor: bool,
 }
 
 impl Features {
@@ -40,6 +41,7 @@ impl Features {
             ares_manual_control: true,
             ares_keep_alive: true,
             ares_attach_effect: true,
+            ares_armor: true,
             ..Self::default()
         }
     }
@@ -54,6 +56,7 @@ impl Features {
         self.ares_manual_control = section.read_bool("AresManualControl", self.ares_manual_control);
         self.ares_keep_alive = section.read_bool("AresKeepAlive", self.ares_keep_alive);
         self.ares_attach_effect = section.read_bool("AresAttachEffect", self.ares_attach_effect);
+        self.ares_armor = section.read_bool("AresArmor", self.ares_armor);
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -81,15 +84,17 @@ pub(crate) struct Configuration {
     attach_effect: attach_effect::Configuration,
     #[serde(default)]
     cloak: cloak::Configuration,
+    #[serde(default)]
+    armor: armor::Configuration,
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.8.0".into(),
+        version: "0.9.0".into(),
         state_version: 1,
-        config_version: 8,
+        config_version: 9,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -100,6 +105,7 @@ pub fn manifest() -> ModuleManifest {
             HookKind::MatchRules,
             HookKind::EffectResource,
             HookKind::Effects,
+            HookKind::ArmorResource,
         ],
     }
 }
@@ -125,6 +131,9 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         // while disabled. Finalize only constrains the retained directories.
         config.attach_effect.configure(context, &view);
         config.cloak.configure(context, &view);
+        // Armor identity and inheritance also belong to each reached physical
+        // read, including layers before the module is enabled.
+        config.armor.configure(context, &view);
         if context.final_pass {
             config.features.validate()?;
             if config.features.ares_ammo {
@@ -154,6 +163,14 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
     }
     config.features.validate()?;
     match &request.context {
+        Context::ArmorResource(context) => {
+            let mut plan = Plan::unchanged(request);
+            plan.state.clear();
+            if config.features.ares_armor {
+                plan.armor_resource = Some(config.armor.query(context));
+            }
+            Ok(plan)
+        }
         Context::MatchRules(_) => {
             let mut plan = Plan::unchanged(request);
             plan.state.clear();

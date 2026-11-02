@@ -53,6 +53,16 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
     );
     assert_eq!(policy.input, Some(vera_mod_api::InputPolicy::default()));
     assert!(policy.depleted_weapon.is_none());
+    let armor = Context::ArmorResource(vera_mod_api::ArmorResourceContext::Catalog);
+    assert_eq!(
+        query(vec![], armor.clone()).armor_resource,
+        Some(vera_mod_api::ArmorResourcePolicy::Catalog {
+            names: vera_mod_api::BASE_ARMOR_NAMES
+                .into_iter()
+                .map(str::to_owned)
+                .collect(),
+        })
+    );
     assert!(
         query(
             vec![],
@@ -80,6 +90,7 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
         Some(vera_mod_api::EffectRuntimePolicy::default())
     );
     assert!(query(bytes.clone(), weapon).weapon_resource.is_none());
+    assert!(query(bytes.clone(), armor).armor_resource.is_none());
     let old_type = query(bytes, object).type_resource.unwrap();
     assert!(old_type.reload.is_none() && old_type.depleted_weapon.is_none());
     assert!(old_type.input.is_none() && old_type.keep_alive.is_none());
@@ -732,4 +743,229 @@ fn effects_shield_and_cloak_keep_separate_state_and_frozen_layered_selection() {
         frozen_query(&disabled, Context::Effects(effect_context.clone())).effects,
         Some(EffectPlan::unchanged(&effect_context))
     );
+}
+
+/// Decoded results from physical native readers. Numeric/parser equivalence
+/// is exercised by the host's real-parser tests, not reimplemented here.
+struct ArmorConfigHost(u8);
+
+impl ArmorConfigHost {
+    fn value(&self, section: &str, key: &str) -> Option<serde_json::Value> {
+        use serde_json::json;
+        match (self.0, section, key) {
+            (0 | 4, "VeraFeatures", "AresArmor") => Some(json!(false)),
+            (2, "VeraFeatures", "AresArmor") => Some(json!(true)),
+            (0, "TARGET", "Armor") => Some(json!("future")),
+            (1, "TARGET", "Armor") => Some(json!("future")),
+            (0, "TREE", "Armor") => Some(json!("heavy")),
+            (1, "ArmorTypes", "paper") => Some(json!("later")),
+            (1, "ArmorTypes", "later") => Some(json!("steel")),
+            (1, "ArmorTypes", "future") => Some(json!("later")),
+            (2, "ArmorTypes", "later") => Some(json!("100%")),
+            (0, "HIT", "Verses") => Some(json!(["50%"])),
+            (1, "HIT", "Versus.steel") => Some(json!("25%")),
+            (1, "HIT", "Versus.paper.ForceFire") => Some(json!(true)),
+            (2, "HIT", "Versus.steel") => Some(json!("50%")),
+            (3, "TARGET", "Armor") => Some(json!("future")),
+            (3, "COLLISION", "Armor") => Some(json!("ABCDEFGHIJKLMNOPQRSTUVWXYZ12345")),
+            (3, "HIT", "Versus.steel.ForceFire") => Some(json!("0%")),
+            _ => None,
+        }
+    }
+}
+
+impl Host for ArmorConfigHost {
+    fn config(&self, section: &str, key: &str) -> Option<String> {
+        self.value(section, key)
+            .map(|_| "decoded host fixture".into())
+    }
+    fn config_read(
+        &self,
+        section: &str,
+        key: &str,
+        reader: &str,
+        current: &[u8],
+    ) -> Result<Vec<u8>, String> {
+        if reader == "verse-token" {
+            assert!(section.is_empty() && key.is_empty());
+            let token: String = serde_json::from_slice(current).unwrap();
+            let policy = match token.as_str() {
+                "50%" => vera_mod_api::ArmorVersePolicy {
+                    multiplier_bits: 0.5f64.to_bits(),
+                    ..Default::default()
+                },
+                "25%" => vera_mod_api::ArmorVersePolicy {
+                    multiplier_bits: 0.25f64.to_bits(),
+                    ..Default::default()
+                },
+                "100%" => vera_mod_api::ArmorVersePolicy::default(),
+                "steel" | "later" | "0%" => vera_mod_api::ArmorVersePolicy {
+                    multiplier_bits: 0.0f64.to_bits(),
+                    force_fire: false,
+                    retaliate: false,
+                    passive_acquire: false,
+                },
+                _ => panic!("unexpected verse token: {token}"),
+            };
+            return serde_json::to_vec(&policy).map_err(|e| e.to_string());
+        }
+        if key == "Versus.steel.ForceFire" && reader == "bool" {
+            return Ok(b"false".to_vec());
+        }
+        let expected = match key {
+            "AresArmor" | "Versus.paper.ForceFire" => "bool",
+            "Verses" => "comma-list:2048",
+            "paper" | "later" | "future" => "name:64",
+            "Armor" | "Versus.steel" | "Versus.steel.ForceFire" => "name:32",
+            _ => panic!("unexpected armor reader: {section}/{key}/{reader}"),
+        };
+        assert_eq!(reader, expected);
+        serde_json::to_vec(&self.value(section, key).unwrap()).map_err(|e| e.to_string())
+    }
+    fn registry(&self, name: &str) -> Vec<String> {
+        let names: &[&str] = match (self.0, name) {
+            (0..=3, "$armor-before-type-data") => &["reached"],
+            (1, "ArmorTypes") => &["paper", "later", "future"],
+            (2, "ArmorTypes") => &["later"],
+            (3, "ArmorTypes") => &[
+                "abcdefghijklmnopqrstuvwxyz12345A",
+                "abcdefghijklmnopqrstuvwxyz12345B",
+                "steel.ForceFire",
+            ],
+            (0, "$armor-units") => &["TARGET"],
+            (3, "$armor-units") => &["TARGET", "COLLISION"],
+            (1, "$armor-infantry") => &["TARGET"],
+            (0 | 1, "$armor-terrain") => &["TREE"],
+            (0..=3, "$armor-warheads") => &["HIT"],
+            (0, "HIT") => &["Verses"],
+            (1, "HIT") => &["Versus.steel", "Versus.paper.ForceFire"],
+            (2, "HIT") => &["Versus.steel"],
+            (3, "HIT") => &["Versus.steel.ForceFire"],
+            _ => &[],
+        };
+        names.iter().map(|name| (*name).into()).collect()
+    }
+    fn damage_kernel(&self, _: &DamageKernelInput) -> Result<i32, String> {
+        panic!("armor configuration cannot calculate damage")
+    }
+}
+
+#[test]
+fn armor_retains_physical_identity_and_inline_records_across_frozen_queries() {
+    use vera_mod_api::{ArmorObjectKind, ArmorResourceContext, ArmorResourcePolicy};
+    let configure = |config, pass, final_pass| {
+        let request = Request {
+            api_version: API_VERSION,
+            context: Context::Configure(vera_mod_api::ConfigureContext {
+                pass: u64::from(pass),
+                source: "decoded-armor-fixture".into(),
+                final_pass,
+                object_types: vec!["TARGET".into()],
+                warheads: vec!["HIT".into()],
+            }),
+            config,
+            state: vec![],
+        };
+        let plan = evaluate(&request, &ArmorConfigHost(pass)).unwrap();
+        plan.validate_for(&request).unwrap();
+        plan.config.unwrap()
+    };
+    let mut config = vec![];
+    // Definitions accumulate while explicitly off, then a later layer enables
+    // the module. An absent later Armor does not retry its earlier unknown name.
+    for pass in 0..=2 {
+        config = configure(config, pass, false);
+    }
+    let frozen = configure(config.clone(), 5, true);
+    let query = |bytes: &[u8], context| {
+        let plan = frozen_query(bytes, Context::ArmorResource(context));
+        assert!(plan.state.is_empty() && plan.projection.is_none());
+        plan.armor_resource
+    };
+    let object = |category, name: &str| ArmorResourceContext::Object {
+        category,
+        name: name.into(),
+    };
+    assert_eq!(
+        query(&frozen, object(ArmorObjectKind::Unit, "TARGET")),
+        Some(ArmorResourcePolicy::Object { armor: 0 })
+    );
+    assert_eq!(
+        query(&frozen, object(ArmorObjectKind::Infantry, "TARGET")),
+        Some(ArmorResourcePolicy::Object { armor: 13 }),
+        "same-named categories retain their distinct physical read points"
+    );
+    assert_eq!(
+        query(&frozen, object(ArmorObjectKind::Terrain, "TREE")),
+        Some(ArmorResourcePolicy::Object { armor: 5 })
+    );
+    assert_eq!(
+        query(&frozen, object(ArmorObjectKind::Terrain, "UNREAD")),
+        Some(ArmorResourcePolicy::Object { armor: 6 })
+    );
+    let Some(ArmorResourcePolicy::Catalog { names }) =
+        query(&frozen, ArmorResourceContext::Catalog)
+    else {
+        panic!("missing frozen catalog")
+    };
+    assert_eq!(&names[11..], &["paper", "later", "future"]);
+    let Some(ArmorResourcePolicy::Warhead {
+        entries,
+        use_medium_wood_target_mask,
+    }) = query(
+        &frozen,
+        ArmorResourceContext::Warhead { name: "HIT".into() },
+    )
+    else {
+        panic!("missing frozen warhead")
+    };
+    assert!(!use_medium_wood_target_mask);
+    assert_eq!(entries[7].multiplier_bits, 0.5f64.to_bits());
+    // Forward reference takes paper's own fallback; a ForceFire override is
+    // an independent raw flag, not a guest interpretation of CanFire.
+    assert_eq!(entries[11].multiplier_bits, 0.0f64.to_bits());
+    assert!(entries[11].force_fire && !entries[11].retaliate);
+    // Both backward inheritance and the following layer keep whole records;
+    // changing steel/the catalog default does not update existing children.
+    assert_eq!(entries[12].multiplier_bits, 0.25f64.to_bits());
+    assert_eq!(entries[13], entries[12]);
+    let rebound = configure(config.clone(), 3, false);
+    assert_eq!(
+        query(&rebound, object(ArmorObjectKind::Unit, "TARGET")),
+        Some(ArmorResourcePolicy::Object { armor: 13 })
+    );
+    // Full32-byte raw keys stay unknown after their31-byte stores. Both are
+    // allocated again on a later pass, while Find keeps the first stored ID.
+    let repeated = configure(rebound, 3, false);
+    let Some(ArmorResourcePolicy::Catalog { names }) =
+        query(&repeated, ArmorResourceContext::Catalog)
+    else {
+        panic!("missing collision catalog")
+    };
+    assert_eq!(
+        &names[14..],
+        &[
+            "abcdefghijklmnopqrstuvwxyz12345",
+            "abcdefghijklmnopqrstuvwxyz12345",
+            "steel.ForceFire",
+            "abcdefghijklmnopqrstuvwxyz12345",
+            "abcdefghijklmnopqrstuvwxyz12345",
+        ]
+    );
+    assert_eq!(
+        query(&repeated, object(ArmorObjectKind::Unit, "COLLISION")),
+        Some(ArmorResourcePolicy::Object { armor: 14 })
+    );
+    let Some(ArmorResourcePolicy::Warhead { entries, .. }) = query(
+        &repeated,
+        ArmorResourceContext::Warhead { name: "HIT".into() },
+    ) else {
+        panic!("missing collision warhead")
+    };
+    // The same exact key is both steel's boolean flag and the verse for the
+    // separately registered armor named steel.ForceFire; neither read is lost.
+    assert!(!entries[7].force_fire);
+    assert_eq!(entries[16].multiplier_bits, 0.0f64.to_bits());
+    let disabled = configure(config, 4, false);
+    assert!(query(&disabled, ArmorResourceContext::Catalog).is_none());
 }

@@ -1,7 +1,7 @@
 //! Narrow configuration and numeric imports. No guest file, clock, or network access.
 use serde::{Serialize, de::DeserializeOwned};
 use std::cell::RefCell;
-use vera_mod_api::DamageKernelInput;
+use vera_mod_api::{ArmorVersePolicy, DamageKernelInput};
 
 pub trait Host {
     fn config(&self, section: &str, key: &str) -> Option<String>;
@@ -49,6 +49,23 @@ impl<'a, H: Host> ConfigView<'a, H> {
     /// include types allocated by references, not just an INI list's keys.
     pub fn registered_names(&self, registry: &str) -> Vec<String> {
         self.host.registry(registry)
+    }
+    /// Decode one already-tokenized verse through the host's canonical Ares
+    /// parser100523E0. No section lookup or guest numeric parser is involved.
+    pub fn parse_verse(&self, token: &str) -> ArmorVersePolicy {
+        let outcome = serde_json::to_vec(token)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| self.host.config_read("", "", "verse-token", &bytes))
+            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()));
+        match outcome {
+            Ok(value) => value,
+            Err(error) => {
+                self.error
+                    .borrow_mut()
+                    .get_or_insert_with(|| format!("armor verse token: {error}"));
+                ArmorVersePolicy::default()
+            }
+        }
     }
     pub fn finish(&self) -> Result<(), String> {
         self.error.borrow().clone().map_or(Ok(()), Err)
@@ -149,6 +166,11 @@ impl<H: Host> Section<'_, H> {
     pub fn read_list(&self, key: &str, capacity: usize) -> Option<Vec<String>> {
         self.read(key, &format!("list:{capacity}"), None::<Vec<String>>)
     }
+    /// The canonical comma-only list reader preserves spaces inside each
+    /// token; callers choose it separately from the whitespace-tokenizing list.
+    pub fn read_comma_list(&self, key: &str, capacity: usize) -> Option<Vec<String>> {
+        self.read(key, &format!("comma-list:{capacity}"), None::<Vec<String>>)
+    }
     pub fn read_int_list(&self, key: &str) -> Option<Vec<i32>> {
         self.read(key, "int-list", None::<Vec<i32>>)
     }
@@ -212,6 +234,7 @@ mod tests {
                 ("Missing", "string:4") => Ok(br#""abc""#.to_vec()),
                 ("Empty", "ares-int") => Ok(b"7".to_vec()),
                 ("Empty", "nullable-int") => Err("reader failure".into()),
+                ("", "verse-token") => Err("verse reader failure".into()),
                 _ => panic!("absent values must retain their defaults without JSON round trips"),
             }
         }
@@ -251,5 +274,15 @@ mod tests {
         assert_eq!(section.read_ares_int("Empty", 3), 7);
         assert_eq!(section.read_phobos_nullable_int("Empty", Some(9)), Some(9));
         assert!(view.finish().unwrap_err().contains("reader failure"));
+    }
+
+    #[test]
+    fn verse_service_errors_invalidate_the_configuration() {
+        let view = ConfigView::new(&PresenceHost);
+        assert_eq!(
+            view.parse_verse("opaque token"),
+            ArmorVersePolicy::default()
+        );
+        assert!(view.finish().unwrap_err().contains("verse reader failure"));
     }
 }

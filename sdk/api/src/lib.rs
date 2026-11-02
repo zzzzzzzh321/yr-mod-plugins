@@ -1,12 +1,16 @@
 //! Messages shared by the engine host and external gameplay components.
 //! All persistent component data is returned to the host as bounded bytes.
 
+mod armor;
 mod effects;
 mod match_rules;
 pub mod native_string;
 pub mod relationship;
 mod resource;
 pub mod timer;
+pub use armor::{
+    ArmorObjectKind, ArmorResourceContext, ArmorResourcePolicy, ArmorVersePolicy, BASE_ARMOR_NAMES,
+};
 pub use effects::{
     EffectAction, EffectContext, EffectControl, EffectDescriptor, EffectEvent, EffectInstanceView,
     EffectPlan, EffectResourceContext, EffectResourceKind,
@@ -52,6 +56,7 @@ pub enum HookKind {
     MatchRules,
     EffectResource,
     Effects,
+    ArmorResource,
 }
 
 impl HookKind {
@@ -66,6 +71,7 @@ impl HookKind {
             Self::MatchRules => "match_rules",
             Self::EffectResource => "effect_resource",
             Self::Effects => "effects",
+            Self::ArmorResource => "armor_resource",
         }
     }
 }
@@ -166,6 +172,7 @@ pub enum Context {
     MatchRules(MatchRulesContext),
     EffectResource(EffectResourceContext),
     Effects(EffectContext),
+    ArmorResource(ArmorResourceContext),
 }
 
 impl Context {
@@ -180,6 +187,7 @@ impl Context {
             Self::MatchRules(_) => HookKind::MatchRules,
             Self::EffectResource(_) => HookKind::EffectResource,
             Self::Effects(_) => HookKind::Effects,
+            Self::ArmorResource(_) => HookKind::ArmorResource,
         }
     }
 }
@@ -221,6 +229,8 @@ pub struct Plan {
     pub effect_resource: Option<EffectDescriptor>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effects: Option<EffectPlan>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub armor_resource: Option<ArmorResourcePolicy>,
 }
 
 impl Plan {
@@ -237,6 +247,7 @@ impl Plan {
             match_rules: None,
             effect_resource: None,
             effects: None,
+            armor_resource: None,
         }
     }
 }
@@ -343,6 +354,7 @@ impl Request {
             Context::MatchRules(_) => None,
             Context::EffectResource(_) => None,
             Context::Effects(context) => Some(context.entity.id),
+            Context::ArmorResource(_) => None,
         }
     }
 }
@@ -402,6 +414,7 @@ impl Plan {
                 | HookKind::TypeResource
                 | HookKind::MatchRules
                 | HookKind::EffectResource
+                | HookKind::ArmorResource
         ) && (!self.state.is_empty()
             || self.projection.is_some()
             || !self.operations.is_empty()
@@ -414,6 +427,12 @@ impl Plan {
         }
         if self.effect_resource.is_some() && request.context.kind() != HookKind::EffectResource {
             return Err("only effect_resource may define an effect resource".into());
+        }
+        if let Some(policy) = &self.armor_resource {
+            let Context::ArmorResource(context) = &request.context else {
+                return Err("only armor_resource may define an armor resource".into());
+            };
+            policy.validate_for(context)?;
         }
         if let Some(plan) = &self.effects {
             let Context::Effects(context) = &request.context else {
