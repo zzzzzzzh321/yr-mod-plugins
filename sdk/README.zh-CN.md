@@ -3,3 +3,5 @@
 `api` 和 `wit` 是固定版本的开发依赖，来源与版本见 [source.json](source.json)。引擎仓库维护权威接口，本工程通过明确的 SDK 更新同步快照；日常编译不访问引擎目录。
 
 `package` 是在本工程维护的组件打包工具，`dev-kit` 提供完整的[独立开发指南](dev-kit/README.zh-CN.md)。快速构建与工程职责见[根目录 README](../README.md)。
+
+参考组件0.7.0保持API v1、WIT、配置版本5及状态版本1不变；四个已外置Ares模块只在新对局安装后默认启用，仍可通过`[VeraFeatures]`显式`no`关闭，Shield/Overload仍需显式开启。默认选择归插件所有，不是SDK或宿主对所有组件施加的默认。旧组件和冻结配置保留原行为，读档仍要求当前作品提供相同摘要的原组件。最低宿主要求及高槽武器边界见[独立开发指南](dev-kit/README.zh-CN.md)。

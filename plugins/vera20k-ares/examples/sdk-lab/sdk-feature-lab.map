@@ -1078,9 +1078,6 @@ Level=0.032
 [VeraFeatures]
 Shield=yes
 Overload=yes
-AresAmmo=yes
-AresReload=yes
-AresNoAmmoWeapon=yes
 
 [VeraOverload]
 HeatLimit=60

@@ -19,6 +19,52 @@ impl Host for FrozenHost {
 }
 
 #[test]
+fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
+    let query = |config, context| {
+        let request = Request {
+            api_version: API_VERSION,
+            context,
+            config,
+            state: vec![],
+        };
+        let plan = evaluate(&request, &FrozenHost).unwrap();
+        plan.validate_for(&request).unwrap();
+        plan
+    };
+    let weapon = Context::WeaponResource(vera_mod_api::WeaponResourceContext {
+        weapon_name: "ORDINARY".into(),
+    });
+    let policy = query(vec![], weapon.clone())
+        .weapon_resource
+        .expect("a newly installed Ares component owns ordinary weapon costs and cadence");
+    assert_eq!(policy.cost, 1);
+    assert!(policy.use_weapon_rof);
+    let object = Context::TypeResource(TypeResourceContext {
+        type_name: "ORDINARY".into(),
+        user: vera_mod_api::WEAPON_USER_BUILDING,
+    });
+    let policy = query(vec![], object.clone()).type_resource.unwrap();
+    assert_eq!(
+        policy.reload,
+        Some(vera_mod_api::ReloadPolicy {
+            normal_amount: 1,
+            empty_amount: 1
+        })
+    );
+    assert_eq!(policy.input, Some(vera_mod_api::InputPolicy::default()));
+    assert!(policy.depleted_weapon.is_none());
+    // Historical nonempty configuration is not a new match, including when
+    // an older producer omitted the feature selection field entirely.
+    let mut historical = serde_json::to_value(Configuration::default()).unwrap();
+    historical.as_object_mut().unwrap().remove("features");
+    let bytes = serde_json::to_vec(&historical).unwrap();
+    assert!(query(bytes.clone(), weapon).weapon_resource.is_none());
+    assert!(query(bytes, object).type_resource.is_none());
+    let fresh = decode_config(&[]).unwrap();
+    assert!(!fresh.features.shield && !fresh.features.overload);
+}
+
+#[test]
 fn ammunition_uses_frozen_configuration_and_excludes_aircraft() {
     let mut config = serde_json::to_value(Configuration::default()).unwrap();
     config["features"]["ares_ammo"] = serde_json::json!(true);
@@ -242,7 +288,6 @@ fn no_ammo_weapon_config_preserves_higher_and_signed_boundary_indices() {
             })
         );
         assert!(policy.applies_to(user));
-        assert!(policy.reload.is_none() && policy.input.is_none());
     }
 }
 
@@ -264,7 +309,9 @@ fn negative_no_ammo_weapon_reconfiguration_removes_the_previous_override() {
         let plan = evaluate(&request, &FrozenHost).unwrap();
         plan.validate_for(&request).unwrap();
         assert!(
-            plan.type_resource.is_none(),
+            plan.type_resource
+                .and_then(|policy| policy.depleted_weapon)
+                .is_none(),
             "negative index {index} disables the override"
         );
     }

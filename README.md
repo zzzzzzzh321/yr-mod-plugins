@@ -2,6 +2,8 @@
 
 本目录是后续外置功能插件的主要维护位置，与 `../engine` 相互独立。当前插件发布文件为 `vera20k-ares.wasm`，已有护盾、过载及 Ares 弹药、装填、低弹量选武器和手动操作限制示例。
 
+从组件 0.7.0 起，新对局安装组件后，`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl` 默认启用，已有 Ares 标签可以直接使用；可在 `[VeraFeatures]` 中将对应项设为 `no` 作对照。各标签自身的默认值不变，例如四个手动操作限制仍默认 `no`。Phobos 护盾与自定义过载仍需显式设置 `Shield=yes`、`Overload=yes`，且过载依赖护盾。默认启用只覆盖已外置范围，不表示完整 Ares 兼容。
+
 ```text
 plugin-dev/
 ├── Cargo.toml
@@ -54,4 +56,4 @@ Ares 全量兼容以[逐项兼容台账](compatibility/README.zh-CN.md)持续跟
 
 `NoAmmoWeapon`按安装版Ares的有符号整数语义处理：任意负数关闭，非负索引原样发布；有效0..17槽复用宿主现有选择器和精英回退。`WeaponN`读取、炮手提前返回及>=18安全无武器的边界见[弹药机制说明](plugins/vera20k-ares/AMMO.zh-CN.md)。建筑动画延迟枪需使用保存完整索引的配套新版宿主。0.6.0不扩展SDK或配置/状态结构。
 
-当前内部组件标识仍为 `vera.reference-gameplay`，组件版本 0.6.0、配置版本 5、状态版本 1。本工程使用独立本地 Git 管理，未经授权不上传或公开。
+当前内部组件标识仍为 `vera.reference-gameplay`，组件版本 0.7.0、配置版本 5、状态版本 1，API v1 与 WIT 不变。新默认只用于新对局；旧组件字节和已冻结配置保留原行为。读档要求当前作品提供与存档摘要相同的原组件，更新时应保留旧版本资源。本工程使用独立本地 Git 管理，未经授权不上传或公开。

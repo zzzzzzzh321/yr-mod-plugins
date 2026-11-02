@@ -25,6 +25,20 @@ struct Features {
 }
 
 impl Features {
+    /// Installed Ares hooks run without a second INI opt-in (for example
+    /// GetROF_BuildingHack10047A60 at6FCFA4 and NoManualFire1004A460 at700536).
+    /// Keep serde's historical Default separate: old frozen configuration
+    /// must never acquire newly enabled features merely by being decoded.
+    fn for_new_match() -> Self {
+        Self {
+            ares_ammo: true,
+            ares_reload: true,
+            ares_no_ammo_weapon: true,
+            ares_manual_control: true,
+            ..Self::default()
+        }
+    }
+
     fn apply_pass<H: Host>(&mut self, view: &ConfigView<'_, H>) {
         let section = view.section_or_empty("VeraFeatures");
         self.shield = section.read_bool("Shield", self.shield);
@@ -60,7 +74,7 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.6.0".into(),
+        version: "0.7.0".into(),
         state_version: 1,
         config_version: 5,
         hooks: vec![
@@ -76,7 +90,10 @@ pub fn manifest() -> ModuleManifest {
 
 fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
     if bytes.is_empty() {
-        Ok(Configuration::default())
+        Ok(Configuration {
+            features: Features::for_new_match(),
+            ..Configuration::default()
+        })
     } else {
         serde_json::from_slice(bytes).map_err(|e| format!("component configuration: {e}"))
     }

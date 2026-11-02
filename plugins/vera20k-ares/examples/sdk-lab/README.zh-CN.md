@@ -8,7 +8,7 @@
 
 本机整理的验收包包含 `00-原版对照.cmd`、`01-兼容护盾.cmd`、`02-过载护盾.cmd`，可以直接双击。它们已填写这台电脑的原版游戏路径；换机器时修改其中的路径。以下命令用于从源码目录启动。
 
-需要 Python 3、兼容 SDK API v1 的 VERA20K 引擎和原版 YR 资源目录。兼容／过载模式使用本工程生成的 `vera20k-ares.wasm` 与同目录的 `vera-mod.json`，建议组件版本 0.4.1 或更新版本。
+需要 Python 3、配套的 VERA20K 引擎和原版 YR 资源目录。兼容／过载模式使用本工程生成的0.7.0 `vera20k-ares.wasm` 与同目录的 `vera-mod.json`；API v1不变，但宿主仍须支持`use_weapon_rof`、可选`input`策略及高槽建筑延迟索引。旧验收包应继续使用其原配组件与声明。
 
 在本目录执行，路径按本机情况填写：
 
@@ -21,7 +21,7 @@ Windows 的引擎文件名为 `vera20k.exe`。三个模式使用相同地图与�
 | `--mode` | 加载方式 | 用途 |
 | --- | --- | --- |
 | `vanilla` | 不提供组件声明和 Wasm | 原版对照，不需要 `--component` |
-| `compatible` | 开启护盾和三项 Ares 弹药功能，关闭过载 | 验证兼容机制 |
+| `compatible` | 显式开启护盾，保留四个Ares模块的新对局默认启用，关闭过载 | 验证当前外置兼容机制 |
 | `overload` | 在 compatible 基础上开启过载 | 比较作者自定义的护盾行为 |
 
 默认全屏、100% 战场缩放；加 `--windowed` 使用窗口。低分辨率下可将鼠标移到画面边缘滚动查看其余区域。每次启动产生一个独立运行目录，配置、日志和存档都保存在那里，不向原版资源目录写文件。`--work-dir` 指定这些目录的父目录；`--detach` 启动后立即返回；`--dry-run` 只校验启动数据。
@@ -73,7 +73,9 @@ D 区空仓装填等待 180 帧，一次恢复 3 发；随后每 90 帧恢复 2 
 
 ## 配置位置与范围
 
-地图 `[VeraFeatures]` 开启 `Shield`、`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`；启动器决定 `Overload`。护盾在 `[SDKLabShield]`、`[SDKLabRecoveryShield]`；过载在 `[VeraOverload]`；弹药标签在各单位与武器节。
+地图`[VeraFeatures]`显式开启`Shield`；组件0.7.0在新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`，不再要求地图写四个`yes`。各手动限制标签仍默认`no`。启动器决定`Overload`。护盾在`[SDKLabShield]`、`[SDKLabRecoveryShield]`；过载在`[VeraOverload]`；弹药标签在各单位与武器节。需要隔离对照时，可在加载的`[VeraFeatures]`中将对应Ares模块显式设为`no`；`vanilla`模式仍直接不加载组件。
+
+新默认不改变旧组件或旧冻结配置。存档保留原组件字节和配置，读档还要求作品资源提供相同摘要的组件；不能用新构建覆盖旧包后直接恢复旧对局。
 
 这张地图覆盖已接入的基础链，不代表所有 Ares／Phobos 功能均已兼容。没有演示护盾附加／移除、类型转换、护盾事件动画、自定义超级武器或多人联机同步。
 

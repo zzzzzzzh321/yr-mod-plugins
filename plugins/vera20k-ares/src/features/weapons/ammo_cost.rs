@@ -1,7 +1,7 @@
 //! Ares weapon Ammo policy, outside the engine. Existing engine resource owners
 //! enforce admission, perform the debit and run the shared reload clock.
 //! Source: Ares WeaponTypeExt ctor100549B4 (+D0=1), ReadINI10055898;
-//! CanFire_Ammo100479B0, TechnoClass_Fire_Ammo100441F0,
+//! CanFire_Ammo100479B0, TechnoClass_Fire_Ammo100479F0 (calls debit100441F0),
 //! InfantryClass_Fire_Ammo10047910 and UnitClass_Fire_Ammo10047B30.
 
 use crate::support::{ConfigView, Host};

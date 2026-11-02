@@ -15,7 +15,7 @@ This plugin is maintained in the independent `plugin-dev` project at
 dependencies and the packager; the runtime stays in the engine. The Cargo package is
 `vera20k-ares`, its raw core artifact is `vera20k_ares.wasm`, and its publication
 filename is `vera20k-ares.wasm`. The internal `vera.reference-gameplay` identity,
-version 0.6.0, config_version=5 and state_version=1. The filename
+version 0.7.0, config_version=5 and state_version=1. API v1 and WIT are unchanged. The filename
 does not claim complete Ares compatibility; the retained Phobos-compatible
 shield and authored overload remain examples in this first plugin.
 
@@ -60,7 +60,9 @@ Every feature uses the same `src/support/host.rs` facade and configuration
 readers. Shared static query/policy types live in `sdk/api/src/resource.rs`;
 `type_resource` adds no Host service or WIT import.
 
-`[VeraFeatures] AresManualControl=yes` enables the four Ares manual-action tags.
+New matches with this component enable AresManualControl by default; the four
+manual-action tags themselves still default to no. Set
+`[VeraFeatures] AresManualControl=no` to opt out of this module.
 See the [Chinese guide](MANUAL.zh-CN.md) and [INI example](examples/manual-control.ini).
 These policies change local action admission; they do not add simulation order filters.
 
@@ -93,26 +95,42 @@ The output directory must be new and its parent must exist. `--program` sets
 the publication filename and declaration together; the generic packager retains
 its `gameplay.wasm` default for invocations without this option. Reuse the same
 `vera20k-ares.wasm` and `vera-mod.json` for each work; Cargo feature flags are no
-longer used for gameplay selection. Put this in a loaded Rules/map INI:
+longer used for gameplay selection. In 0.7.0, new matches enable AresAmmo,
+AresReload, AresNoAmmoWeapon and AresManualControl without opt-in keys, so the
+implemented original Ares tags work directly. Shield and Overload still default
+to no. For example, add a compatible shield in a loaded Rules/map INI:
 
 ```ini
 [VeraFeatures]
 Shield=yes
 Overload=no
-AresAmmo=yes
-AresReload=yes
-AresNoAmmoWeapon=yes
-AresManualControl=yes
 ```
 
-All switches default to no. Overload requires Shield; the four Ares switches
-are independent. Existing `ShieldTypes`, `ShieldType`, weapon `Ammo` and
+The four Ares modules can be disabled independently for comparison:
+
+```ini
+[VeraFeatures]
+AresAmmo=no
+AresReload=no
+AresNoAmmoWeapon=no
+AresManualControl=no
+```
+
+These are VERA controls, not additional original Ares tags. Missing, empty or
+invalid values retain the current layer's prior selection; an explicit no stays
+disabled until a later valid yes. Overload requires Shield. Existing
+`ShieldTypes`, `ShieldType`, weapon `Ammo` and
 per-type `ReloadAmount`, `EmptyReloadAmount`, `NoAmmoWeapon`, `NoAmmoAmount`
 settings retain their syntax. Layered selection
 is frozen with the configuration and saved/checksummed; it cannot change during
 a match. `examples/features.ini` shows the combined selection. The component
-identity is `vera.reference-gameplay` 0.6.0, config_version=5, state_version=1.
-Retained older component files keep their original behavior and identity.
+identity is `vera.reference-gameplay` 0.7.0, config_version=5, state_version=1.
+The new defaults apply only to a new match's empty initial configuration.
+Nonempty frozen configurations are not upgraded. Saved component bytes and
+configuration retain their original behavior; restore also requires the current
+work's component digest to match the saved digest exactly. Keep the old artifact
+and its declaration for old saves. New defaults do not complete the remaining
+Ares compatibility gaps.
 
 `ReloadAmount` defaults to 1 and `EmptyReloadAmount` defaults to the normal
 amount. The empty amount is selected only at current ammo exactly zero, even
@@ -146,8 +164,8 @@ Version 0.6.0 changes no SDK fields or configuration/state schemas.
 
 Aircraft may use this selection policy. Their weapon-0-specific approach,
 strafe, ROF and projectile-course reads keep their original ownership. To fire
-a free backup at zero ammo for a supported ground category, also enable
-AresAmmo and give that weapon `Ammo=0`. Aircraft retain their own release,
+a free backup at zero ammo for a supported ground category, keep AresAmmo
+enabled (the new-match default) and give that weapon `Ammo=0`. Aircraft retain their own release,
 return and dock-reload mechanisms; weapon Ammo=0 does not make aircraft shots
 free. See the [Ares resource guide](AMMO.zh-CN.md) and
 [combined example](examples/resource-cycle.ini).
