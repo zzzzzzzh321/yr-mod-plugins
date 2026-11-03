@@ -111,6 +111,33 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
     // Historical nonempty configuration is not a new match, including when
     // an older producer omitted the feature selection field entirely.
     let mut historical = serde_json::to_value(Configuration::default()).unwrap();
+    // These no-tag installation fixes remain active with every existing
+    // feature disabled, without extending the opaque config/state schema.
+    assert!(
+        historical["features"]
+            .as_object()
+            .unwrap()
+            .values()
+            .all(|value| value == &serde_json::json!(false))
+    );
+    assert!(historical.get("building_presentation").is_none());
+    let request = Request {
+        api_version: API_VERSION,
+        context: Context::MatchRules(vera_mod_api::MatchRulesContext {}),
+        config: serde_json::to_vec(&historical).unwrap(),
+        state: vec![],
+    };
+    let plan = evaluate(&request, &FrozenHost).unwrap();
+    let plan: Plan = serde_json::from_slice(&serde_json::to_vec(&plan).unwrap()).unwrap();
+    plan.validate_for(&request).unwrap();
+    assert_eq!(
+        plan.match_rules.unwrap().building_presentation,
+        Some(vera_mod_api::BuildingPresentationPolicy {
+            independent_palette_groups: true,
+            destroy_anim_house_fallback: true,
+        })
+    );
+    assert!(plan.config.is_none() && plan.state.is_empty());
     historical.as_object_mut().unwrap().remove("features");
     historical.as_object_mut().unwrap().remove("spotlight");
     historical

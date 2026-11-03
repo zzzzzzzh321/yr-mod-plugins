@@ -25,7 +25,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development source is 0.19.0, configuration version 15 and entity state
+Current development source is 0.20.0, configuration version 15 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
@@ -46,6 +46,13 @@ presentation plus optional `loading_theme_resource`. Version 0.18 connects sideb
 EVA SetSide, message colors, GraphicalText and score consumption through the same
 frozen declarations and original presentation owners. Actual-component, legacy and real-retail
 loading checks passed for the bounded Country presentation chain; see the [Chinese guide](../../sdk/dev-kit/README.zh-CN.md#阵营共享配置与玩法).
+
+Version 0.20 declares the two installed `match_rules.building_presentation`
+selectors independently of feature INI switches. Retained ART readers, palette
+decoding and AnimRemap remain host-owned; final binding refreshes the existing
+catalog before constructors. Building SHP/MAKE palettes and surviving DestroyAnim
+colors passed actual-component, save, indexed GPU, legacy and retail controls.
+Animation damage ownership and further building/voxel extensions are separate.
 
 Version 0.19 declares `long_list_readers = Extended2048` before gameplay
 configuration. This installed fix covers only House Allies and the two Techno

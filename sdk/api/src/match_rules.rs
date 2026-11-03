@@ -33,6 +33,19 @@ pub struct MatchRulesPolicy {
     /// from the actual Side declaration; absence keeps the host's legacy mode.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub registered_side_ui: Option<bool>,
+    /// Installed building body/MAKE and DestroyAnim presentation selectors.
+    /// None preserves the host profile; explicit false values select retail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub building_presentation: Option<BuildingPresentationPolicy>,
+}
+
+/// The existing host keeps retained ART requests, successful palette groups,
+/// animation remaps and all render assets. These selectors add no live state.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BuildingPresentationPolicy {
+    pub independent_palette_groups: bool,
+    pub destroy_anim_house_fallback: bool,
 }
 
 /// Frozen selectors for existing shared numeric and crate owners. The
@@ -74,9 +87,11 @@ mod tests {
         let mut policy: MatchRulesPolicy = serde_json::from_str(old).unwrap();
         assert_eq!(policy.script_type_conversion, None);
         assert_eq!(policy.registered_side_ui, None);
+        assert_eq!(policy.building_presentation, None);
         assert_eq!(serde_json::to_string(&policy).unwrap(), old);
         policy.script_type_conversion = Some(false);
         policy.registered_side_ui = Some(false);
+        policy.building_presentation = Some(BuildingPresentationPolicy::default());
         let bytes = serde_json::to_vec(&policy).unwrap();
         assert_eq!(
             serde_json::from_slice::<MatchRulesPolicy>(&bytes).unwrap(),

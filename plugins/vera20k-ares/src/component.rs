@@ -128,7 +128,7 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.19.0".into(),
+        version: "0.20.0".into(),
         state_version: 1,
         config_version: 15,
         hooks: vec![
@@ -382,6 +382,12 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                 script_type_conversion: Some(config.features.ares_type_conversion),
                 extended_ai_side_tokens: Some(config.features.ares_faction),
                 registered_side_ui: Some(config.features.ares_faction),
+                // Installed presentation fixes do not require an INI opt-in;
+                // retained ART requests and palette assets remain host-owned.
+                building_presentation: Some(vera_mod_api::BuildingPresentationPolicy {
+                    independent_palette_groups: true,
+                    destroy_anim_house_fallback: true,
+                }),
             });
             Ok(plan)
         }
