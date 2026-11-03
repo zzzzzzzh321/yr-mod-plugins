@@ -54,6 +54,10 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
     assert_eq!(policy.input, Some(vera_mod_api::InputPolicy::default()));
     assert!(policy.depleted_weapon.is_none());
     assert_eq!(
+        policy.conversion,
+        Some(vera_mod_api::TypeConversionPolicy::default())
+    );
+    assert_eq!(
         policy.spotlight,
         Some(vera_mod_api::SpotlightPolicy {
             has_spotlight: Some(false),
@@ -86,33 +90,35 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
             reactivation_requires_powered_center: true,
         })
     );
-    assert!(
-        query(
-            vec![],
-            Context::MatchRules(vera_mod_api::MatchRulesContext {})
-        )
-        .match_rules
-        .unwrap()
-        .effects
-        .unwrap()
-        .apply_rof
-    );
+    let fresh_match = query(
+        vec![],
+        Context::MatchRules(vera_mod_api::MatchRulesContext {}),
+    )
+    .match_rules
+    .unwrap();
+    assert!(fresh_match.effects.unwrap().apply_rof);
+    assert_eq!(fresh_match.script_type_conversion, Some(true));
     // Historical nonempty configuration is not a new match, including when
     // an older producer omitted the feature selection field entirely.
     let mut historical = serde_json::to_value(Configuration::default()).unwrap();
     historical.as_object_mut().unwrap().remove("features");
     historical.as_object_mut().unwrap().remove("spotlight");
-    let bytes = serde_json::to_vec(&historical).unwrap();
-    assert_eq!(
-        query(
-            bytes.clone(),
-            Context::MatchRules(vera_mod_api::MatchRulesContext {})
-        )
-        .match_rules
+    historical
+        .as_object_mut()
         .unwrap()
-        .effects,
+        .remove("type_conversion");
+    let bytes = serde_json::to_vec(&historical).unwrap();
+    let old_match = query(
+        bytes.clone(),
+        Context::MatchRules(vera_mod_api::MatchRulesContext {}),
+    )
+    .match_rules
+    .unwrap();
+    assert_eq!(
+        old_match.effects,
         Some(vera_mod_api::EffectRuntimePolicy::default())
     );
+    assert_eq!(old_match.script_type_conversion, Some(false));
     assert!(query(bytes.clone(), weapon).weapon_resource.is_none());
     assert!(query(bytes.clone(), armor).armor_resource.is_none());
     assert!(
@@ -145,6 +151,10 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
     assert!(old_type.reload.is_none() && old_type.depleted_weapon.is_none());
     assert!(old_type.input.is_none() && old_type.keep_alive.is_none());
     assert_eq!(old_type.cloak_allowed, Some(true));
+    assert_eq!(
+        old_type.conversion,
+        Some(vera_mod_api::TypeConversionPolicy::default())
+    );
     assert_eq!(
         old_type.spotlight,
         Some(vera_mod_api::SpotlightPolicy::default())

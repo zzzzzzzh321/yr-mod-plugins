@@ -3,6 +3,7 @@ use serde::{Serialize, de::DeserializeOwned};
 use std::cell::RefCell;
 use vera_mod_api::{
     ArmorVersePolicy, DamageKernelInput, NullableResourceName, ProductionRegistryView,
+    ProductionTypeRef,
 };
 
 pub trait Host {
@@ -130,6 +131,9 @@ impl<H: Host> Section<'_, H> {
     pub fn read_ares_int(&self, key: &str, current: i32) -> i32 {
         self.read(key, "ares-int", current)
     }
+    pub fn read_ares_nullable_int(&self, key: &str, current: Option<i32>) -> Option<i32> {
+        self.read(key, "ares-nullable-int", current)
+    }
     pub fn read_ares_emp_threshold(&self, key: &str, current: i32) -> i32 {
         self.read(key, "ares-emp-threshold", current)
     }
@@ -176,6 +180,19 @@ impl<H: Host> Section<'_, H> {
         let reader = match &self.registry {
             Some(scope) => format!("ares-ref:{registry}@{scope}"),
             None => format!("ares-ref:{registry}"),
+        };
+        self.read(key, &reader, current)
+    }
+    /// Find a typed identity in the reached common Techno construction prefix;
+    /// the host owns sentinel rejection, order, and unknown-value retention.
+    pub fn read_ares_registered_type(
+        &self,
+        key: &str,
+        current: Option<ProductionTypeRef>,
+    ) -> Option<ProductionTypeRef> {
+        let reader = match &self.registry {
+            Some(scope) => format!("ares-ref:$technos@{scope}"),
+            None => "ares-ref:$technos".into(),
         };
         self.read(key, &reader, current)
     }

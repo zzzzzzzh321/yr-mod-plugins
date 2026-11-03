@@ -93,6 +93,17 @@ impl Default for SpotlightPolicy {
     }
 }
 
+/// Frozen inputs for the existing same-object conversion owner. A target may
+/// name any registered Techno class; the host's runtime admission decides
+/// whether the source can convert to it. Secondary ROT keeps its signed input
+/// and is applied only during conversion by the existing Facing owner.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TypeConversionPolicy {
+    pub script_target: Option<crate::ProductionTypeRef>,
+    pub secondary_rot: Option<i32>,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TypeResourcePolicy {
@@ -114,6 +125,10 @@ pub struct TypeResourcePolicy {
     pub cloak_allowed: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spotlight: Option<SpotlightPolicy>,
+    /// None preserves older-component/profile behavior. Some with an empty
+    /// target and rate explicitly removes the corresponding legacy overrides.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub conversion: Option<TypeConversionPolicy>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -135,6 +150,7 @@ impl TypeResourcePolicy {
             keep_alive: None,
             cloak_allowed: None,
             spotlight: None,
+            conversion: None,
         }
     }
 
@@ -155,6 +171,7 @@ mod tests {
         assert_eq!(policy.keep_alive, None);
         assert_eq!(policy.cloak_allowed, None);
         assert_eq!(policy.spotlight, None);
+        assert_eq!(policy.conversion, None);
         assert_eq!(serde_json::to_string(&policy).unwrap(), old);
         policy.input = Some(InputPolicy {
             deny_manual_attack: true,
@@ -183,6 +200,18 @@ mod tests {
                 .unwrap()
                 .keep_alive,
             Some(false)
+        );
+        policy.conversion = Some(TypeConversionPolicy {
+            script_target: Some(crate::ProductionTypeRef {
+                category: crate::ProductionObjectKind::Building,
+                ordinal: 3,
+            }),
+            secondary_rot: Some(-255),
+        });
+        assert_eq!(
+            serde_json::from_slice::<TypeResourcePolicy>(&serde_json::to_vec(&policy).unwrap())
+                .unwrap(),
+            policy
         );
     }
 

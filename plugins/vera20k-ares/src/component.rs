@@ -5,7 +5,7 @@ use crate::{
         defense::{armor, shield},
         houses::survival,
         production,
-        units::{attach_effect, cloak, emp, manual_control, spotlight},
+        units::{attach_effect, cloak, emp, manual_control, spotlight, type_conversion},
         weapons::{ammo_cost, empty_weapon, reload},
     },
     support::{ConfigView, Host},
@@ -30,6 +30,7 @@ struct Features {
     ares_production: bool,
     ares_emp: bool,
     ares_spotlight: bool,
+    ares_type_conversion: bool,
 }
 
 impl Features {
@@ -49,6 +50,7 @@ impl Features {
             ares_production: true,
             ares_emp: true,
             ares_spotlight: true,
+            ares_type_conversion: true,
             ..Self::default()
         }
     }
@@ -67,6 +69,8 @@ impl Features {
         self.ares_production = section.read_bool("AresProduction", self.ares_production);
         self.ares_emp = section.read_bool("AresEMP", self.ares_emp);
         self.ares_spotlight = section.read_bool("AresSpotlight", self.ares_spotlight);
+        self.ares_type_conversion =
+            section.read_bool("AresTypeConversion", self.ares_type_conversion);
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -102,15 +106,17 @@ pub(crate) struct Configuration {
     emp: emp::Configuration,
     #[serde(default)]
     spotlight: spotlight::Configuration,
+    #[serde(default)]
+    type_conversion: type_conversion::Configuration,
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.12.0".into(),
+        version: "0.13.0".into(),
         state_version: 1,
-        config_version: 12,
+        config_version: 13,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -177,6 +183,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         // while disabled. Finalize only constrains the retained directories.
         config.attach_effect.configure(context, &view);
         config.cloak.configure(context, &view);
+        config.type_conversion.configure(context, &view);
         // Armor identity and inheritance also belong to each reached physical
         // read, including layers before the module is enabled.
         config.armor.configure(context, &view);
@@ -266,6 +273,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                         allow_active_ability_above_ground: config.features.ares_attach_effect,
                     },
                 }),
+                script_type_conversion: Some(config.features.ares_type_conversion),
             });
             Ok(plan)
         }
@@ -330,6 +338,11 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                     context.user,
                     config.features.ares_spotlight,
                 )),
+                conversion: Some(config.type_conversion.query(
+                    &context.type_name,
+                    context.user,
+                    config.features.ares_type_conversion,
+                )),
             });
             Ok(plan)
         }
@@ -367,3 +380,5 @@ mod production_tests;
 mod spotlight_tests;
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod type_conversion_tests;

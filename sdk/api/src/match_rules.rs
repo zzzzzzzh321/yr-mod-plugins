@@ -20,6 +20,10 @@ pub struct MatchRulesPolicy {
     pub survival: SurvivalRule,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub effects: Option<EffectRuntimePolicy>,
+    /// Selects the existing Script68 handler even when no current type names
+    /// a conversion target. None keeps older-component/profile behavior.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub script_type_conversion: Option<bool>,
 }
 
 /// Frozen selectors for existing shared numeric and crate owners. The
@@ -49,4 +53,28 @@ pub struct CloakRuntimePolicy {
     pub deny_parachuted: bool,
     pub check_recloak_before_weapon: bool,
     pub allow_active_ability_above_ground: bool,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_match_rules_omit_conversion_and_explicit_off_round_trips() {
+        let old = r#"{"survival":"retail"}"#;
+        let mut policy: MatchRulesPolicy = serde_json::from_str(old).unwrap();
+        assert_eq!(policy.script_type_conversion, None);
+        assert_eq!(serde_json::to_string(&policy).unwrap(), old);
+        policy.script_type_conversion = Some(false);
+        let bytes = serde_json::to_vec(&policy).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<MatchRulesPolicy>(&bytes).unwrap(),
+            policy
+        );
+        assert!(
+            std::str::from_utf8(&bytes)
+                .unwrap()
+                .contains("\"script_type_conversion\":false")
+        );
+    }
 }

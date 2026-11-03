@@ -35,8 +35,9 @@ pub use production::{
 
 pub use resource::{
     DepletedWeaponPolicy, InputPolicy, ReloadPolicy, SpotlightAttachment, SpotlightPolicy,
-    TypeResourceContext, TypeResourcePolicy, WEAPON_USER_AIRCRAFT, WEAPON_USER_BUILDING,
-    WEAPON_USER_INFANTRY, WEAPON_USER_UNIT, WeaponResourceContext, WeaponResourcePolicy,
+    TypeConversionPolicy, TypeResourceContext, TypeResourcePolicy, WEAPON_USER_AIRCRAFT,
+    WEAPON_USER_BUILDING, WEAPON_USER_INFANTRY, WEAPON_USER_UNIT, WeaponResourceContext,
+    WeaponResourcePolicy,
 };
 
 use serde::{Deserialize, Serialize};
@@ -445,6 +446,7 @@ impl Plan {
                     && policy.keep_alive.is_none()
                     && policy.cloak_allowed.is_none()
                     && policy.spotlight.is_none()
+                    && policy.conversion.is_none()
                 || policy.depleted_weapon.is_some_and(|p| p.weapon_index < 0)
                 || policy.spotlight.is_some_and(|p| p.glow_flags & !0x0f != 0)
             {
@@ -687,6 +689,7 @@ mod tests {
             keep_alive: None,
             cloak_allowed: None,
             spotlight: None,
+            conversion: None,
         });
         plan.validate_for(&request).unwrap();
         plan.type_resource.as_mut().unwrap().users = WEAPON_USER_AIRCRAFT;
@@ -730,6 +733,15 @@ mod tests {
             .as_mut()
             .unwrap()
             .glow_flags = 15;
+        plan.type_resource.as_mut().unwrap().spotlight = None;
+        plan.type_resource.as_mut().unwrap().conversion = Some(TypeConversionPolicy {
+            script_target: Some(ProductionTypeRef {
+                category: ProductionObjectKind::Building,
+                ordinal: 3,
+            }),
+            secondary_rot: Some(-255),
+        });
+        plan.validate_for(&request).unwrap();
         plan.state.push(1);
         assert!(plan.validate_for(&request).is_err());
         plan.state.clear();
