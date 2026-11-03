@@ -121,6 +121,7 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
             .all(|value| value == &serde_json::json!(false))
     );
     assert!(historical.get("building_presentation").is_none());
+    assert!(historical.get("anim_damage").is_none());
     let request = Request {
         api_version: API_VERSION,
         context: Context::MatchRules(vera_mod_api::MatchRulesContext {}),
@@ -135,6 +136,13 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
         Some(vera_mod_api::BuildingPresentationPolicy {
             independent_palette_groups: true,
             destroy_anim_house_fallback: true,
+        })
+    );
+    assert_eq!(
+        plan.match_rules.unwrap().anim_damage,
+        Some(vera_mod_api::AnimDamagePolicy {
+            use_source_house: true,
+            prefer_art_warhead: true,
         })
     );
     assert!(plan.config.is_none() && plan.state.is_empty());

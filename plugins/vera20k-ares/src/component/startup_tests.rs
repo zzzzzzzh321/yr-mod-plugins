@@ -116,7 +116,7 @@ fn long_lists_are_a_pure_installation_declaration_without_feature_configuration(
     assert!(plan.config.is_none() && plan.state.is_empty());
     let manifest = manifest();
     assert!(manifest.hooks.contains(&HookKind::LongListReaders));
-    assert_eq!(manifest.version, "0.20.0");
+    assert_eq!(manifest.version, "0.21.0");
     assert_eq!(
         (
             manifest.api_version,

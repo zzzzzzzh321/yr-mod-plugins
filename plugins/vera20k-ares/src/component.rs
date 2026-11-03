@@ -128,7 +128,7 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.20.0".into(),
+        version: "0.21.0".into(),
         state_version: 1,
         config_version: 15,
         hooks: vec![
@@ -387,6 +387,12 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                 building_presentation: Some(vera_mod_api::BuildingPresentationPolicy {
                     independent_palette_groups: true,
                     destroy_anim_house_fallback: true,
+                }),
+                // The host retains the Anim damage owner and ART reference;
+                // these installed fixes do not depend on feature INI flags.
+                anim_damage: Some(vera_mod_api::AnimDamagePolicy {
+                    use_source_house: true,
+                    prefer_art_warhead: true,
                 }),
             });
             Ok(plan)
