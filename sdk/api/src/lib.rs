@@ -59,7 +59,7 @@ pub use resource::{
     WeaponResourcePolicy,
 };
 pub use startup::{
-    CsfLanguageGate, EvaCatalogPolicy, IncludeSemantics, MAX_STARTUP_RESOURCES,
+    CsfLanguageGate, EvaCatalogPolicy, IncludeSemantics, LongListReadersPolicy, MAX_STARTUP_RESOURCES,
     StartupAudioCatalog, StartupAudioPair, StartupCsfCandidate, StartupCsfComposition,
     StartupResourceContext, StartupResourcePolicy,
 };
@@ -102,6 +102,7 @@ pub enum HookKind {
     FoundationResource,
     StartupResources,
     EvaCatalog,
+    LongListReaders,
     ConfigureCountryRead,
     FactionResource,
     ConfigureFactionPass,
@@ -127,6 +128,7 @@ impl HookKind {
             Self::FoundationResource => "foundation_resource",
             Self::StartupResources => "startup_resources",
             Self::EvaCatalog => "eva_catalog",
+            Self::LongListReaders => "long_list_readers",
             Self::ConfigureCountryRead => "configure_country_read",
             Self::FactionResource => "faction_resource",
             Self::ConfigureFactionPass => "configure_faction_pass",
@@ -238,6 +240,7 @@ pub enum Context {
     FoundationResource(FoundationResourceContext),
     StartupResources(StartupResourceContext),
     EvaCatalog,
+    LongListReaders,
     /// Current physical source is available through configuration services.
     /// No full Rules pass is invented at this pre-body frontier.
     ConfigureCountryRead,
@@ -267,6 +270,7 @@ impl Context {
             Self::FoundationResource(_) => HookKind::FoundationResource,
             Self::StartupResources(_) => HookKind::StartupResources,
             Self::EvaCatalog => HookKind::EvaCatalog,
+            Self::LongListReaders => HookKind::LongListReaders,
             Self::ConfigureCountryRead => HookKind::ConfigureCountryRead,
             Self::FactionResource(_) => HookKind::FactionResource,
             Self::ConfigureFactionPass => HookKind::ConfigureFactionPass,
@@ -325,6 +329,8 @@ pub struct Plan {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub eva_catalog: Option<EvaCatalogPolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub long_list_readers: Option<LongListReadersPolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub country_read: Option<CountryReadPolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub faction_resource: Option<FactionResourcePolicy>,
@@ -352,6 +358,7 @@ impl Plan {
             foundation_resource: None,
             startup_resources: None,
             eva_catalog: None,
+            long_list_readers: None,
             country_read: None,
             faction_resource: None,
             loading_theme: None,
@@ -434,7 +441,7 @@ impl Request {
         }
         if matches!(
             self.context.kind(),
-            HookKind::StartupResources | HookKind::EvaCatalog
+            HookKind::StartupResources | HookKind::EvaCatalog | HookKind::LongListReaders
         ) && (!self.config.is_empty() || !self.state.is_empty())
         {
             return Err("startup recipes cannot consume gameplay configuration or state".into());
@@ -489,6 +496,7 @@ impl Request {
             | Context::FoundationResource(_)
             | Context::StartupResources(_)
             | Context::EvaCatalog
+            | Context::LongListReaders
             | Context::ConfigureCountryRead
             | Context::FactionResource(_)
             | Context::ConfigureFactionPass
@@ -570,6 +578,7 @@ impl Plan {
                 | HookKind::FoundationResource
                 | HookKind::StartupResources
                 | HookKind::EvaCatalog
+                | HookKind::LongListReaders
                 | HookKind::ConfigureCountryRead
                 | HookKind::FactionResource
                 | HookKind::ConfigureFactionPass
@@ -619,6 +628,9 @@ impl Plan {
         }
         if self.eva_catalog.is_some() && request.context.kind() != HookKind::EvaCatalog {
             return Err("only eva_catalog may select the fixed speech catalog".into());
+        }
+        if self.long_list_readers.is_some() && request.context.kind() != HookKind::LongListReaders {
+            return Err("only long_list_readers may select the early list readers".into());
         }
         if self.country_read.is_some() && request.context.kind() != HookKind::ConfigureCountryRead {
             return Err("only configure_country_read may select the pre-body reader".into());
@@ -711,6 +723,21 @@ mod tests {
         request.config.push(1);
         assert!(request.validate().is_err());
 
+        request.context = Context::LongListReaders;
+        request.config.clear();
+        request.validate().unwrap();
+        plan = Plan::unchanged(&request);
+        plan.long_list_readers = Some(LongListReadersPolicy::Retail128);
+        plan.validate_for(&request).unwrap();
+        assert_eq!(
+            serde_json::to_value(&plan).unwrap()["long_list_readers"],
+            "retail_128"
+        );
+        plan.state.push(1);
+        assert!(plan.validate_for(&request).is_err());
+        request.config.push(1);
+        assert!(request.validate().is_err());
+
         request.context = Context::ConfigureCountryRead;
         request.validate().unwrap();
         plan = Plan::unchanged(&request);
@@ -720,6 +747,9 @@ mod tests {
         plan.eva_catalog = Some(EvaCatalogPolicy::Retail);
         assert!(plan.validate_for(&request).is_err());
         plan.eva_catalog = None;
+        plan.long_list_readers = Some(LongListReadersPolicy::Extended2048);
+        assert!(plan.validate_for(&request).is_err());
+        plan.long_list_readers = None;
         plan.state.push(1);
         assert!(plan.validate_for(&request).is_err());
         request.state.push(1);

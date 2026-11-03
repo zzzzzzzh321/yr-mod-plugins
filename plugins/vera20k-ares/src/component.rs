@@ -128,7 +128,7 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.18.0".into(),
+        version: "0.19.0".into(),
         state_version: 1,
         config_version: 15,
         hooks: vec![
@@ -148,6 +148,7 @@ pub fn manifest() -> ModuleManifest {
             HookKind::FoundationResource,
             HookKind::StartupResources,
             HookKind::EvaCatalog,
+            HookKind::LongListReaders,
             HookKind::ConfigureCountryRead,
             HookKind::FactionResource,
             HookKind::ConfigureFactionPass,
@@ -169,6 +170,13 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
 
 pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, String> {
     request.validate()?;
+    if let Context::LongListReaders = &request.context {
+        // AR247 is an installed reader fix, independent of gameplay flags.
+        // Select before decoding configuration or asking Host for any INI.
+        let mut plan = Plan::unchanged(request);
+        plan.long_list_readers = Some(vera_mod_api::LongListReadersPolicy::Extended2048);
+        return Ok(plan);
+    }
     if let Context::EvaCatalog = &request.context {
         let mut plan = Plan::unchanged(request);
         plan.eva_catalog = Some(vera_mod_api::EvaCatalogPolicy::RegisteredVoiceColumns);
@@ -300,7 +308,10 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
     }
     config.features.validate()?;
     match &request.context {
-        Context::EvaCatalog | Context::ConfigureCountryRead | Context::ConfigureFactionPass => {
+        Context::EvaCatalog
+        | Context::LongListReaders
+        | Context::ConfigureCountryRead
+        | Context::ConfigureFactionPass => {
             unreachable!("handled before feature validation")
         }
         Context::FactionResource(context) => {

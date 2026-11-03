@@ -14,6 +14,18 @@ pub enum EvaCatalogPolicy {
     RegisteredVoiceColumns,
 }
 
+/// Select only the existing House Allies and Techno Prerequisite /
+/// PrerequisiteOverride ReadString buffers before cold Rules processing.
+/// General prerequisite groups and physical INI line admission are unchanged.
+/// A missing declaration preserves the host's existing reader profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub enum LongListReadersPolicy {
+    #[serde(rename = "retail_128")]
+    Retail128,
+    #[serde(rename = "extended_2048")]
+    Extended2048,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "stage", rename_all = "snake_case", deny_unknown_fields)]
 pub enum StartupResourceContext {
