@@ -239,6 +239,7 @@ pub(crate) fn evaluate<H: Host>(
         | Context::ProductionResource(_)
         | Context::EmpResource(_)
         | Context::FoundationResource(_)
+        | Context::CameoResource(_)
         | Context::StartupResources(_)
         | Context::EvaCatalog
         | Context::LongListReaders

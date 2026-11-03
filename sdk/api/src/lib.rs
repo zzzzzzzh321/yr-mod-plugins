@@ -2,6 +2,7 @@
 //! All persistent component data is returned to the host as bounded bytes.
 
 mod armor;
+mod cameo;
 mod configuration;
 mod effects;
 mod emp;
@@ -17,6 +18,11 @@ mod startup;
 pub mod timer;
 pub use armor::{
     ArmorObjectKind, ArmorResourceContext, ArmorResourcePolicy, ArmorVersePolicy, BASE_ARMOR_NAMES,
+};
+pub use cameo::{
+    CameoReadPoint, CameoRegistryView, CameoResourceContext, CameoResourcePolicy,
+    SuperWeaponCameoDeclaration, TechnoCameoDeclaration, MAX_CAMEO_DECLARATIONS,
+    MAX_CAMEO_FILENAME_BYTES,
 };
 pub use configuration::{
     ConfigurationBoundary, ConfigureBoundaryContext, CountryReadPolicy, FixedIniSource,
@@ -108,6 +114,7 @@ pub enum HookKind {
     FactionResource,
     ConfigureFactionPass,
     LoadingThemeResource,
+    CameoResource,
 }
 
 impl HookKind {
@@ -134,6 +141,7 @@ impl HookKind {
             Self::FactionResource => "faction_resource",
             Self::ConfigureFactionPass => "configure_faction_pass",
             Self::LoadingThemeResource => "loading_theme_resource",
+            Self::CameoResource => "cameo_resource",
         }
     }
 }
@@ -250,6 +258,7 @@ pub enum Context {
     /// Other configuration domains must not reread this source.
     ConfigureFactionPass,
     LoadingThemeResource(LoadingThemeResourceContext),
+    CameoResource(CameoResourceContext),
 }
 
 impl Context {
@@ -276,6 +285,7 @@ impl Context {
             Self::FactionResource(_) => HookKind::FactionResource,
             Self::ConfigureFactionPass => HookKind::ConfigureFactionPass,
             Self::LoadingThemeResource(_) => HookKind::LoadingThemeResource,
+            Self::CameoResource(_) => HookKind::CameoResource,
         }
     }
 }
@@ -337,6 +347,8 @@ pub struct Plan {
     pub faction_resource: Option<FactionResourcePolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub loading_theme: Option<LoadingThemePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cameo_resource: Option<CameoResourcePolicy>,
 }
 
 impl Plan {
@@ -363,6 +375,7 @@ impl Plan {
             country_read: None,
             faction_resource: None,
             loading_theme: None,
+            cameo_resource: None,
         }
     }
 }
@@ -460,6 +473,9 @@ impl Request {
             }
             context.validate()?;
         }
+        if matches!(self.context, Context::CameoResource(_)) && !self.state.is_empty() {
+            return Err("cameo resource queries have no entity state".into());
+        }
         let user = match &self.context {
             Context::TypeResource(context) => Some(context.user),
             Context::Effects(context) => Some(context.user),
@@ -501,7 +517,8 @@ impl Request {
             | Context::ConfigureCountryRead
             | Context::FactionResource(_)
             | Context::ConfigureFactionPass
-            | Context::LoadingThemeResource(_) => None,
+            | Context::LoadingThemeResource(_)
+            | Context::CameoResource(_) => None,
         }
     }
 }
@@ -584,6 +601,7 @@ impl Plan {
                 | HookKind::FactionResource
                 | HookKind::ConfigureFactionPass
                 | HookKind::LoadingThemeResource
+                | HookKind::CameoResource
         ) && (!self.state.is_empty()
             || self.projection.is_some()
             || !self.operations.is_empty()
@@ -647,6 +665,12 @@ impl Plan {
                 return Err("only loading_theme_resource may select loading names".into());
             };
             policy.validate_for(context)?;
+        }
+        if let Some(policy) = &self.cameo_resource {
+            if !matches!(request.context, Context::CameoResource(_)) {
+                return Err("only cameo_resource may declare cameo art".into());
+            }
+            policy.validate()?;
         }
         if let Some(plan) = &self.effects {
             let Context::Effects(context) = &request.context else {

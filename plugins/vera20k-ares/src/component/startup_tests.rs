@@ -25,10 +25,10 @@ fn query(context: Query) -> Plan {
 #[test]
 fn startup_source_and_audio_recipes_are_ordered_installation_declarations() {
     assert!(manifest().hooks.contains(&HookKind::StartupResources));
-    // The frozen schema now retains the additional faction configuration.
+    // The frozen schema now retains the Type-owned cameo declarations.
     assert_eq!(
         (manifest().state_version, manifest().config_version),
-        (1, 15)
+        (1, 16)
     );
     assert_eq!(
         query(Query::SourceComposition).startup_resources,
@@ -116,13 +116,13 @@ fn long_lists_are_a_pure_installation_declaration_without_feature_configuration(
     assert!(plan.config.is_none() && plan.state.is_empty());
     let manifest = manifest();
     assert!(manifest.hooks.contains(&HookKind::LongListReaders));
-    assert_eq!(manifest.version, "0.21.0");
+    assert_eq!(manifest.version, "0.22.0");
     assert_eq!(
         (
             manifest.api_version,
             manifest.config_version,
             manifest.state_version
         ),
-        (1, 15, 1)
+        (1, 16, 1)
     );
 }

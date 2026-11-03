@@ -146,6 +146,17 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
         })
     );
     assert!(plan.config.is_none() && plan.state.is_empty());
+    let cameo_plan = query(
+        request.config.clone(),
+        Context::CameoResource(vera_mod_api::CameoResourceContext {}),
+    );
+    assert_eq!(
+        cameo_plan.cameo_resource,
+        Some(vera_mod_api::CameoResourcePolicy::default())
+    );
+    assert!(cameo_plan.config.is_none() && cameo_plan.state.is_empty());
+    assert!(manifest().hooks.contains(&HookKind::CameoResource));
+    assert!(manifest().hooks.contains(&HookKind::ConfigureBoundary));
     historical.as_object_mut().unwrap().remove("features");
     historical.as_object_mut().unwrap().remove("spotlight");
     historical

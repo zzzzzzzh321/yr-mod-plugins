@@ -25,7 +25,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development source is 0.21.0, configuration version 15 and entity state
+Current development source is 0.22.0, configuration version 16 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
@@ -46,6 +46,19 @@ presentation plus optional `loading_theme_resource`. Version 0.18 connects sideb
 EVA SetSide, message colors, GraphicalText and score consumption through the same
 frozen declarations and original presentation owners. Actual-component, legacy and real-retail
 loading checks passed for the bounded Country presentation chain; see the [Chinese guide](../../sdk/dev-kit/README.zh-CN.md#阵营共享配置与玩法).
+
+Version 0.22 adds one `cameo_resource` catalog for normal, promoted and
+SuperWeapon PCX declarations. The component retains names at the actual physical
+Rules/ART read points; the host keeps the shared filename reader, PCX/SHP decoder,
+60x48 logical canvas and atlas. Missing promoted art falls back to normal PCX,
+then the existing SHP path; a fully transparent PCX stays selected. No new INI
+switch or per-icon guest call is required. An absent catalog preserves the old
+profile; an explicit empty catalog selects stock. Actual-component GPU, exact
+save restoration, legacy and seven retail-mode checks passed, including the
+previous component. Formal resource binding follows the completed scenario and
+common TypeReset; intermediate host configuration is not proof that native
+SuperWeapon extensions survive ClearScene. See the [catalog API](../../sdk/api/src/cameo.rs).
+This remains a bounded baseline migration, not full Ares or native pixel parity.
 
 Version 0.21 declares both `match_rules.anim_damage` selectors independently
 of feature INI switches. Existing animation/attached-Techno House and ART

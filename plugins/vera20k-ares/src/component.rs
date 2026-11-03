@@ -6,6 +6,7 @@ use crate::{
         defense::{armor, shield},
         factions,
         houses::survival,
+        presentation::cameos,
         production,
         resources::{startup, loading_theme},
         units::{attach_effect, cloak, emp, manual_control, spotlight, type_conversion},
@@ -122,15 +123,17 @@ pub(crate) struct Configuration {
     foundation: foundation::Configuration,
     #[serde(default)]
     factions: factions::Configuration,
+    #[serde(default)]
+    cameos: cameos::Configuration,
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.21.0".into(),
+        version: "0.22.0".into(),
         state_version: 1,
-        config_version: 15,
+        config_version: 16,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -153,6 +156,7 @@ pub fn manifest() -> ModuleManifest {
             HookKind::FactionResource,
             HookKind::ConfigureFactionPass,
             HookKind::LoadingThemeResource,
+            HookKind::CameoResource,
         ],
     }
 }
@@ -231,18 +235,28 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         // ScenarioClear10004EF1 recreates RulesExt while retained Side/Country
         // objects still reach E_multi's second primary read. Their one-shot
         // parent history dies only with the actual TypeReset6686C0 family.
-        let (production, emp, factions) = match context.boundary {
+        // Temporarily retain cameo configuration until the common TypeReset.
+        // Native ClearScene685659 -> Ares10004D90 also clears SWTypeExt at
+        // 10004F25; this is not a claim that its old surfaces survive Clear.
+        // The formal cameo binder consumes a completed scenario after reset.
+        let (production, emp, factions, cameos) = match context.boundary {
             vera_mod_api::ConfigurationBoundary::ScenarioClear => (
                 production::Configuration::default(),
                 emp::Configuration::default(),
                 std::mem::take(&mut config.factions),
+                std::mem::take(&mut config.cameos),
             ),
             vera_mod_api::ConfigurationBoundary::TypeReset => {
                 let mut retained = std::mem::take(&mut config.production);
                 retained.reset_types();
                 let mut retained_emp = std::mem::take(&mut config.emp);
                 retained_emp.reset_types();
-                (retained, retained_emp, factions::Configuration::default())
+                (
+                    retained,
+                    retained_emp,
+                    factions::Configuration::default(),
+                    cameos::Configuration::default(),
+                )
             }
         };
         config = Configuration {
@@ -250,6 +264,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             production,
             emp,
             factions,
+            cameos,
             ..Configuration::default()
         };
         let mut plan = Plan::unchanged(request);
@@ -267,6 +282,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         config.type_conversion.configure(context, &view);
         config.foundation.configure(context, &view)?;
         config.factions.configure(context, &view)?;
+        config.cameos.configure(context, &view)?;
         // Armor identity and inheritance also belong to each reached physical
         // read, including layers before the module is enabled.
         config.armor.configure(context, &view);
@@ -322,6 +338,12 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             Ok(plan)
         }
         Context::ConfigureBoundary(_) => unreachable!("handled before feature validation"),
+        Context::CameoResource(_) => {
+            let mut plan = Plan::unchanged(request);
+            plan.state.clear();
+            plan.cameo_resource = Some(config.cameos.query());
+            Ok(plan)
+        }
         Context::FoundationResource(context) => {
             let mut plan = Plan::unchanged(request);
             plan.state.clear();
@@ -492,6 +514,8 @@ pub(crate) fn freeze_shield(shield: shield::Configuration, overload: bool) -> Ve
     .unwrap()
 }
 
+#[cfg(test)]
+mod cameo_tests;
 #[cfg(test)]
 mod emp_tests;
 #[cfg(test)]

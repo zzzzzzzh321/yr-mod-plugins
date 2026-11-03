@@ -4,6 +4,7 @@ pub(crate) mod buildings;
 pub(crate) mod defense;
 pub(crate) mod factions;
 pub(crate) mod houses;
+pub(crate) mod presentation;
 pub(crate) mod production;
 pub(crate) mod resources;
 pub(crate) mod units;

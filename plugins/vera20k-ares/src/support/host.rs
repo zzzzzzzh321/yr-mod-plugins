@@ -2,9 +2,9 @@
 use serde::{Serialize, de::DeserializeOwned};
 use std::cell::RefCell;
 use vera_mod_api::{
-    ArmorVersePolicy, DamageKernelInput, FactionLookup, FactionReadValue, FactionRegistryView,
-    FoundationRegistryView, ImmutableIniSectionRef, ImmutableIniValue, NullableResourceName,
-    ProductionRegistryView, ProductionTypeRef,
+    ArmorVersePolicy, CameoRegistryView, DamageKernelInput, FactionLookup, FactionReadValue,
+    FactionRegistryView, FoundationRegistryView, ImmutableIniSectionRef, ImmutableIniValue,
+    NullableResourceName, ProductionRegistryView, ProductionTypeRef,
 };
 
 pub trait Host {
@@ -152,6 +152,17 @@ impl<'a, H: Host> ConfigView<'a, H> {
         let bytes = self.host.config_read("", "", "fixed-art-view", b"null")?;
         serde_json::from_slice(&bytes).map_err(|e| format!("fixed ART view: {e}"))
     }
+    /// A separate optional source domain keeps older closed ART views intact.
+    /// Once advertised, missing or malformed reader replies reject admission.
+    pub fn cameo_view(&self) -> Result<CameoRegistryView, String> {
+        if self.host.registry("$cameos").is_empty() {
+            return Ok(CameoRegistryView::default());
+        }
+        let bytes = self
+            .host
+            .config_read("", "", "cameo-registry-view", b"null")?;
+        serde_json::from_slice(&bytes).map_err(|e| format!("cameo registry view: {e}"))
+    }
     fn read_source<T: Clone + Serialize + DeserializeOwned>(
         &self,
         reference: &ImmutableIniSectionRef,
@@ -210,6 +221,19 @@ impl<'a, H: Host> ConfigView<'a, H> {
             "Foundation",
             "foundation-stock",
             current,
+        )
+    }
+    pub fn read_source_pcx_filename(
+        &self,
+        reference: &ImmutableIniSectionRef,
+        key: &str,
+    ) -> Option<String> {
+        self.read_source(
+            reference,
+            &reference.section,
+            key,
+            "source-pcx-filename",
+            None::<String>,
         )
     }
     /// Decode one already-tokenized verse through the host's canonical Ares
@@ -321,6 +345,9 @@ impl<H: Host> Section<'_, H> {
     }
     pub fn read_name(&self, key: &str, capacity: usize) -> Option<String> {
         self.read(key, &format!("name:{capacity}"), None::<String>)
+    }
+    pub fn read_pcx_filename(&self, key: &str) -> Option<String> {
+        self.read(key, "pcx-filename", None::<String>)
     }
     pub fn read_ares_registered_name(
         &self,
