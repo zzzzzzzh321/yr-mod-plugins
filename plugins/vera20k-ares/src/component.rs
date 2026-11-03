@@ -2,6 +2,7 @@
 //! one component; simulation only uses the frozen selection, never live INI.
 use crate::{
     features::{
+        buildings::foundation,
         defense::{armor, shield},
         houses::survival,
         production,
@@ -31,6 +32,7 @@ struct Features {
     ares_emp: bool,
     ares_spotlight: bool,
     ares_type_conversion: bool,
+    ares_foundation: bool,
 }
 
 impl Features {
@@ -51,6 +53,7 @@ impl Features {
             ares_emp: true,
             ares_spotlight: true,
             ares_type_conversion: true,
+            ares_foundation: true,
             ..Self::default()
         }
     }
@@ -71,6 +74,7 @@ impl Features {
         self.ares_spotlight = section.read_bool("AresSpotlight", self.ares_spotlight);
         self.ares_type_conversion =
             section.read_bool("AresTypeConversion", self.ares_type_conversion);
+        self.ares_foundation = section.read_bool("AresFoundation", self.ares_foundation);
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -108,15 +112,17 @@ pub(crate) struct Configuration {
     spotlight: spotlight::Configuration,
     #[serde(default)]
     type_conversion: type_conversion::Configuration,
+    #[serde(default)]
+    foundation: foundation::Configuration,
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.13.0".into(),
+        version: "0.14.0".into(),
         state_version: 1,
-        config_version: 13,
+        config_version: 14,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -131,6 +137,7 @@ pub fn manifest() -> ModuleManifest {
             HookKind::ProductionResource,
             HookKind::ConfigureBoundary,
             HookKind::EmpResource,
+            HookKind::FoundationResource,
         ],
     }
 }
@@ -184,6 +191,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         config.attach_effect.configure(context, &view);
         config.cloak.configure(context, &view);
         config.type_conversion.configure(context, &view);
+        config.foundation.configure(context, &view)?;
         // Armor identity and inheritance also belong to each reached physical
         // read, including layers before the module is enabled.
         config.armor.configure(context, &view);
@@ -226,6 +234,16 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
     config.features.validate()?;
     match &request.context {
         Context::ConfigureBoundary(_) => unreachable!("handled before feature validation"),
+        Context::FoundationResource(context) => {
+            let mut plan = Plan::unchanged(request);
+            plan.state.clear();
+            plan.foundation_resource = Some(
+                config
+                    .foundation
+                    .query(context, config.features.ares_foundation),
+            );
+            Ok(plan)
+        }
         Context::EmpResource(context) => {
             let mut plan = Plan::unchanged(request);
             plan.state.clear();
@@ -374,6 +392,8 @@ pub(crate) fn freeze_shield(shield: shield::Configuration, overload: bool) -> Ve
 
 #[cfg(test)]
 mod emp_tests;
+#[cfg(test)]
+mod foundation_tests;
 #[cfg(test)]
 mod production_tests;
 #[cfg(test)]

@@ -2,8 +2,8 @@
 use serde::{Serialize, de::DeserializeOwned};
 use std::cell::RefCell;
 use vera_mod_api::{
-    ArmorVersePolicy, DamageKernelInput, NullableResourceName, ProductionRegistryView,
-    ProductionTypeRef,
+    ArmorVersePolicy, DamageKernelInput, FoundationRegistryView, ImmutableIniSectionRef,
+    ImmutableIniValue, NullableResourceName, ProductionRegistryView, ProductionTypeRef,
 };
 
 pub trait Host {
@@ -60,6 +60,75 @@ impl<'a, H: Host> ConfigView<'a, H> {
             .host
             .config_read("", "", "rules-registry-view", b"null")?;
         serde_json::from_slice(&bytes).map_err(|e| format!("rules registry view: {e}"))
+    }
+    /// An optional fixed-source configuration domain. Old decoded hosts may
+    /// omit it; once discovered, service or decoding errors must propagate.
+    pub fn fixed_art_view(&self) -> Result<FoundationRegistryView, String> {
+        if self.host.registry("$fixed-art").is_empty() {
+            return Ok(FoundationRegistryView::default());
+        }
+        let bytes = self.host.config_read("", "", "fixed-art-view", b"null")?;
+        serde_json::from_slice(&bytes).map_err(|e| format!("fixed ART view: {e}"))
+    }
+    fn read_source<T: Clone + Serialize + DeserializeOwned>(
+        &self,
+        reference: &ImmutableIniSectionRef,
+        owner: &str,
+        key: &str,
+        reader: &str,
+        current: T,
+    ) -> T {
+        // Rules-only presence probes cannot describe this source. Always ask
+        // the canonical fixed-source reader, including absent/empty keys.
+        let input = ImmutableIniValue {
+            reference: reference.clone(),
+            current: current.clone(),
+        };
+        let outcome = serde_json::to_vec(&input)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| self.host.config_read(owner, key, reader, &bytes))
+            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()));
+        match outcome {
+            Ok(value) => value,
+            Err(error) => {
+                self.error.borrow_mut().get_or_insert_with(|| {
+                    format!(
+                        "fixed source [{}] {key} ({owner}): {error}",
+                        reference.section
+                    )
+                });
+                current
+            }
+        }
+    }
+    pub fn read_source_string(
+        &self,
+        reference: &ImmutableIniSectionRef,
+        key: &str,
+        current: &str,
+        capacity: usize,
+    ) -> String {
+        self.read_source(
+            reference,
+            &reference.section,
+            key,
+            &format!("source-string:{capacity}"),
+            current.to_owned(),
+        )
+    }
+    pub fn read_stock_foundation(
+        &self,
+        reference: &ImmutableIniSectionRef,
+        type_name: &str,
+        current: u8,
+    ) -> u8 {
+        self.read_source(
+            reference,
+            type_name,
+            "Foundation",
+            "foundation-stock",
+            current,
+        )
     }
     /// Decode one already-tokenized verse through the host's canonical Ares
     /// parser100523E0. No section lookup or guest numeric parser is involved.

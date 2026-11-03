@@ -78,13 +78,13 @@ dist/release-new/
 └── vera-mod.json
 ```
 
-声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.13.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`和`AresTypeConversion`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
+声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.14.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`和`AresFoundation`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
 
 如果设置了 `CARGO_TARGET_DIR`，原始 Wasm 的位置随之改变；打包命令中的输入路径也应使用该目标目录。源码修改和编译过程不会自动改变作品当前对局中的组件。
 
 ## SDK 与引擎版本
 
-接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.13.0开发分支使用配置版本13、状态版本1；0.12.0探照灯增量已完成集中验收，类型转换增量已通过本轮验收，整体迁移尚未完成，也未替换保留交付。
+接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.14.0开发分支使用配置版本14、状态版本1；探照灯、类型转换和建筑占地增量已完成集中验收，整体迁移尚未完成，也未替换保留交付。
 
 开发分支新增`match_rules`、`effect_resource`、`effects`、`armor_resource`、`production_resource`、`configure_boundary`和`emp_resource`可选能力，以及类型隐形许可等消息字段。宿主须提供物理Rules读取点的注册类型查询、效果实例事务、原数学/动画/隐形所有者和相应保存恢复接入；只认识原有回调的宿主无法运行这版组件。组件的护盾字节与宿主效果列表分别保存，效果列表只有一个所有者。宿主接收静态策略时建立派生缓存，每次效果更新只提交经校验的有序动作。护甲增量已通过关联回归及真实资源加载，整体迁移仍在进行。SDK快照的配套引擎来源提交见`sdk/source.json`。
 
@@ -115,3 +115,7 @@ EMP 扩展位于 `features/units/emp`。新配置默认启用 `AresEMP`，历史
 探照灯通过现有 `type_resource.spotlight` 发布静态声明，没有新增逐帧回调或灯光状态。新对局默认启用 `AresSpotlight`；关闭时恢复原版建筑灯规则。两套开关沿各自的物理读取时点累积，不能从最终合并文本重新猜测。原版 General 参数继续由宿主保留，颜色与几何交给原绘制链。本增量已通过关联行为、旧实现对照、应用资源加载、现有 GPU 像素对照和七种真实资源加载检查；原有绘制残差继续保留。
 
 类型转换通过现有 `type_resource.conversion` 与 `match_rules.script_type_conversion` 发布冻结声明。`AresTypeConversion` 默认启用，关闭时恢复原版 Script68 不执行行为。`Convert.Script` 使用真实读取点的共同 Techno 顺序，保留类别和编号；`TurretROT` 保留完整有符号输入，只在转换时交原 Facing 所有者处理。单位状态、队伍游标和运动控制器仍由原引擎拥有。本增量已通过关联行为、旧实现对照、正式资源恢复和七种真实资源加载检查。普通引擎接纳停用矿车枚举分支后会改变完整存档布局；旧存档保留对应旧引擎和组件。
+
+建筑占地使用独立的 `foundation_resource` 声明，源码在 `features/buildings/foundation.rs`。插件按真实 Building 读取点保存原版占地编号和第一次 `Foundation=Custom` 的固定 ART section 引用，关闭期间也保留这段历史；`AresFoundation=no` 只改变最终选择。插件不保存或逐格读取几何数组。宿主校验来源、内容散列与 section 后，由原 Foundation 模块生成完整占地和轮廓，摆放、占格、寻路与存档沿用原有所有者。读档复用保存的配置和匹配的固定 ART，不重新执行配置。普通引擎通过最终绑定检查自定义几何；旧内置 Ares 编译模式中，原始非法 Custom 仍会在更早的规则校验处失败，即使组件随后关闭该功能。
+
+本占地增量已通过真实组件的空间与存档测试、关联回归、旧实现对照、正式客户端及现有摆放 GPU 检查、七种真实资源加载模式和上一版组件加载检查。这不表示所有自定义占地绘制路径都已与原生逐像素对照。普通构建新增 Custom 类型后，完整存档布局和配置摘要会变化；旧存档保留对应旧引擎与组件。

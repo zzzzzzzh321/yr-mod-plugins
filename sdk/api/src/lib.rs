@@ -5,6 +5,7 @@ mod armor;
 mod configuration;
 mod effects;
 mod emp;
+mod foundation;
 mod match_rules;
 pub mod native_string;
 mod production;
@@ -14,13 +15,20 @@ pub mod timer;
 pub use armor::{
     ArmorObjectKind, ArmorResourceContext, ArmorResourcePolicy, ArmorVersePolicy, BASE_ARMOR_NAMES,
 };
-pub use configuration::{ConfigurationBoundary, ConfigureBoundaryContext};
+pub use configuration::{
+    ConfigurationBoundary, ConfigureBoundaryContext, FixedIniSource, ImmutableIniSectionRef,
+    ImmutableIniValue,
+};
 pub use effects::{
     EffectAction, EffectContext, EffectControl, EffectDescriptor, EffectEvent, EffectInstanceView,
     EffectPlan, EffectResourceContext, EffectResourceKind,
 };
 pub use emp::{
     EmpResourceContext, EmpResourcePolicy, EmpTypePolicy, EmpWarheadPolicy, NullableResourceName,
+};
+pub use foundation::{
+    FoundationReadPoint, FoundationRegistryView, FoundationResourceContext,
+    FoundationResourcePolicy, STOCK_FOUNDATION_COUNT,
 };
 pub use match_rules::{
     CloakRuntimePolicy, EffectRuntimePolicy, MatchRulesContext, MatchRulesPolicy, SurvivalRule,
@@ -75,6 +83,7 @@ pub enum HookKind {
     ProductionResource,
     ConfigureBoundary,
     EmpResource,
+    FoundationResource,
 }
 
 impl HookKind {
@@ -93,6 +102,7 @@ impl HookKind {
             Self::ProductionResource => "production_resource",
             Self::ConfigureBoundary => "configure_boundary",
             Self::EmpResource => "emp_resource",
+            Self::FoundationResource => "foundation_resource",
         }
     }
 }
@@ -197,6 +207,7 @@ pub enum Context {
     ProductionResource(ProductionResourceContext),
     ConfigureBoundary(ConfigureBoundaryContext),
     EmpResource(EmpResourceContext),
+    FoundationResource(FoundationResourceContext),
 }
 
 impl Context {
@@ -215,6 +226,7 @@ impl Context {
             Self::ProductionResource(_) => HookKind::ProductionResource,
             Self::ConfigureBoundary(_) => HookKind::ConfigureBoundary,
             Self::EmpResource(_) => HookKind::EmpResource,
+            Self::FoundationResource(_) => HookKind::FoundationResource,
         }
     }
 }
@@ -262,6 +274,8 @@ pub struct Plan {
     pub production_resource: Option<ProductionResourcePolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub emp_resource: Option<EmpResourcePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub foundation_resource: Option<FoundationResourcePolicy>,
 }
 
 impl Plan {
@@ -281,6 +295,7 @@ impl Plan {
             armor_resource: None,
             production_resource: None,
             emp_resource: None,
+            foundation_resource: None,
         }
     }
 }
@@ -391,7 +406,8 @@ impl Request {
             Context::ArmorResource(_) => None,
             Context::ProductionResource(_)
             | Context::ConfigureBoundary(_)
-            | Context::EmpResource(_) => None,
+            | Context::EmpResource(_)
+            | Context::FoundationResource(_) => None,
         }
     }
 }
@@ -463,6 +479,7 @@ impl Plan {
                 | HookKind::ProductionResource
                 | HookKind::ConfigureBoundary
                 | HookKind::EmpResource
+                | HookKind::FoundationResource
         ) && (!self.state.is_empty()
             || self.projection.is_some()
             || !self.operations.is_empty()
@@ -491,6 +508,12 @@ impl Plan {
         if let Some(policy) = &self.emp_resource {
             let Context::EmpResource(context) = &request.context else {
                 return Err("only emp_resource may define EMP resources".into());
+            };
+            policy.validate_for(context)?;
+        }
+        if let Some(policy) = &self.foundation_resource {
+            let Context::FoundationResource(context) = &request.context else {
+                return Err("only foundation_resource may select a foundation".into());
             };
             policy.validate_for(context)?;
         }
@@ -749,6 +772,51 @@ mod tests {
             weapon_name: "GUN".into(),
         });
         assert!(plan.validate_for(&request).is_err());
+    }
+
+    #[test]
+    fn foundation_resources_are_static_class_qualified_and_bounded() {
+        let mut request = Request {
+            api_version: API_VERSION,
+            context: Context::FoundationResource(FoundationResourceContext {
+                building: ProductionTypeRef {
+                    category: ProductionObjectKind::Building,
+                    ordinal: 3,
+                },
+            }),
+            config: vec![],
+            state: vec![],
+        };
+        let mut plan = Plan::unchanged(&request);
+        plan.foundation_resource = Some(FoundationResourcePolicy::Stock { selector: 21 });
+        plan.validate_for(&request).unwrap();
+        plan.foundation_resource = Some(FoundationResourcePolicy::Stock { selector: 22 });
+        assert!(plan.validate_for(&request).is_err());
+        plan.foundation_resource = Some(FoundationResourcePolicy::ArtSection {
+            reference: ImmutableIniSectionRef {
+                source: FixedIniSource::FixedArt,
+                source_hash: 7,
+                section: "ART".into(),
+            },
+        });
+        plan.validate_for(&request).unwrap();
+        plan.state.push(1);
+        assert!(plan.validate_for(&request).is_err());
+        plan.state.clear();
+        if let Context::FoundationResource(context) = &mut request.context {
+            context.building.category = ProductionObjectKind::Unit;
+        }
+        assert!(plan.validate_for(&request).is_err());
+        request.context = Context::WeaponResource(WeaponResourceContext {
+            weapon_name: "GUN".into(),
+        });
+        assert!(plan.validate_for(&request).is_err());
+        if let Some(FoundationResourcePolicy::ArtSection { reference }) =
+            &mut plan.foundation_resource
+        {
+            reference.section = "bad\nsection".into();
+            assert!(reference.validate().is_err());
+        }
     }
 
     #[test]
