@@ -6,7 +6,7 @@ use crate::{
         defense::{armor, shield},
         factions,
         houses::survival,
-        presentation::cameos,
+        presentation::{cameos, promotion_sounds},
         production,
         resources::{startup, loading_theme},
         units::{attach_effect, cloak, emp, manual_control, spotlight, type_conversion},
@@ -125,15 +125,17 @@ pub(crate) struct Configuration {
     factions: factions::Configuration,
     #[serde(default)]
     cameos: cameos::Configuration,
+    #[serde(default)]
+    promotion_sounds: promotion_sounds::Configuration,
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.22.0".into(),
+        version: "0.23.0".into(),
         state_version: 1,
-        config_version: 16,
+        config_version: 17,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -157,6 +159,7 @@ pub fn manifest() -> ModuleManifest {
             HookKind::ConfigureFactionPass,
             HookKind::LoadingThemeResource,
             HookKind::CameoResource,
+            HookKind::TypeSoundResource,
         ],
     }
 }
@@ -239,6 +242,9 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         // Native ClearScene685659 -> Ares10004D90 also clears SWTypeExt at
         // 10004F25; this is not a claim that its old surfaces survive Clear.
         // The formal cameo binder consumes a completed scenario after reset.
+        // Pending promotion declarations use the same completed-scenario
+        // boundary. TypeReset clears them but retains the fixed sound source.
+        let mut promotion_sounds = std::mem::take(&mut config.promotion_sounds);
         let (production, emp, factions, cameos) = match context.boundary {
             vera_mod_api::ConfigurationBoundary::ScenarioClear => (
                 production::Configuration::default(),
@@ -247,6 +253,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                 std::mem::take(&mut config.cameos),
             ),
             vera_mod_api::ConfigurationBoundary::TypeReset => {
+                promotion_sounds.reset_types();
                 let mut retained = std::mem::take(&mut config.production);
                 retained.reset_types();
                 let mut retained_emp = std::mem::take(&mut config.emp);
@@ -265,6 +272,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             emp,
             factions,
             cameos,
+            promotion_sounds,
             ..Configuration::default()
         };
         let mut plan = Plan::unchanged(request);
@@ -293,6 +301,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             config.production.configure(&view, &physical)?;
             config.emp.configure(&view, &physical);
             config.spotlight.configure(&view, &physical)?;
+            config.promotion_sounds.configure(&view, &physical)?;
         }
         if context.final_pass {
             config.spotlight.finalize(context);
@@ -342,6 +351,12 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             let mut plan = Plan::unchanged(request);
             plan.state.clear();
             plan.cameo_resource = Some(config.cameos.query());
+            Ok(plan)
+        }
+        Context::TypeSoundResource(_) => {
+            let mut plan = Plan::unchanged(request);
+            plan.state.clear();
+            plan.type_sound_resource = Some(config.promotion_sounds.query());
             Ok(plan)
         }
         Context::FoundationResource(context) => {
@@ -522,6 +537,8 @@ mod emp_tests;
 mod foundation_tests;
 #[cfg(test)]
 mod production_tests;
+#[cfg(test)]
+mod promotion_sound_tests;
 #[cfg(test)]
 mod spotlight_tests;
 #[cfg(test)]

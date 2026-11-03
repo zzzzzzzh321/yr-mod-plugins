@@ -25,7 +25,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development source is 0.22.0, configuration version 16 and entity state
+Current development source is 0.23.0, configuration version 17 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
@@ -46,6 +46,19 @@ presentation plus optional `loading_theme_resource`. Version 0.18 connects sideb
 EVA SetSide, message colors, GraphicalText and score consumption through the same
 frozen declarations and original presentation owners. Actual-component, legacy and real-retail
 loading checks passed for the bounded Country presentation chain; see the [Chinese guide](../../sdk/dev-kit/README.zh-CN.md#阵营共享配置与玩法).
+
+Version 0.23 adds one `type_sound_resource` catalog for
+`Promote.VeteranSound` / `Promote.EliteSound`. Reached Techno reads retain
+inherit-global, explicit silence and registered-cue states. The host borrows the
+process-selected SOUNDMD registry, validates its source hash and native Type
+identities, then binds the catalog once; promotion state, positional SFX and EVA
+remain in their existing owners. Registered literal `none` remains a cue, while
+silence suppresses only SFX. Absence keeps the old profile; an empty catalog
+selects global cues even in a legacy host. Actual AI-to-dispatcher, save/continued
+promotion, changed-source rejection, legacy, shared PCX GPU and seven retail-mode
+checks passed. Playback on an audio device was not tested. This needs a matching
+host; API v1/WIT do not imply compatibility with older hosts. See the
+[type sound API](../../sdk/api/src/audio.rs).
 
 Version 0.22 adds one `cameo_resource` catalog for normal, promoted and
 SuperWeapon PCX declarations. The component retains names at the actual physical

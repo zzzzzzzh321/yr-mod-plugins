@@ -156,6 +156,16 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
     );
     assert!(cameo_plan.config.is_none() && cameo_plan.state.is_empty());
     assert!(manifest().hooks.contains(&HookKind::CameoResource));
+    let sound_plan = query(
+        request.config.clone(),
+        Context::TypeSoundResource(vera_mod_api::TypeSoundResourceContext {}),
+    );
+    assert_eq!(
+        sound_plan.type_sound_resource,
+        Some(vera_mod_api::TypeSoundResourcePolicy::default())
+    );
+    assert!(sound_plan.config.is_none() && sound_plan.state.is_empty());
+    assert!(manifest().hooks.contains(&HookKind::TypeSoundResource));
     assert!(manifest().hooks.contains(&HookKind::ConfigureBoundary));
     historical.as_object_mut().unwrap().remove("features");
     historical.as_object_mut().unwrap().remove("spotlight");

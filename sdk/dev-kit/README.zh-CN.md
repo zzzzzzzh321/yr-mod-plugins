@@ -78,11 +78,13 @@ dist/release-new/
 └── vera-mod.json
 ```
 
-声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.22.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
+声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.23.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
 
 如果设置了 `CARGO_TARGET_DIR`，原始 Wasm 的位置随之改变；打包命令中的输入路径也应使用该目标目录。源码修改和编译过程不会自动改变作品当前对局中的组件。
 
 ## SDK 与引擎版本
+
+0.23 新增一次性 `type_sound_resource` 目录，接通 `Promote.VeteranSound`／`Promote.EliteSound`。插件沿实际 Techno 读取点保留继承全局、静音和已注册音效三态，宿主校验固定 SOUNDMD 来源及原生类型身份后一次绑定；军衔、位置音效和 EVA 仍由原机制维护。已注册的字面 `none` 是音效，静音仅关闭音效、不关闭 EVA。未声明保留旧模式，显式空目录在旧构建中也使用全局音效。不增加 INI 开关或逐次晋升 Wasm 调用。实际晋升到派发、存档后继续升级、来源变化拒绝、旧实现、共享 PCX GPU 及七种真实资源模式检查通过；未测试音频设备实际播放，仍需配套新版宿主。 接口见[类型音效目录](../api/src/audio.rs)，实现维护在 `features/presentation/promotion_sounds.rs`，Host 薄适配仍集中在 `support/host.rs`。音效必须先由实际 SOUNDMD 的 `[SoundList]` 注册；未知、缺失、空值保留上次声明，未注册的 `none`／`<none>` 才表示静音。声音目录在首次配置前固定，同一 Arc 贯穿独立投影、类型重置和恢复；保存不序列化目录，正式恢复重绑后校验来源，即使名称与编号相同也不接受不同输入。新增能力使用配置版本17、状态版本1，API v1/WIT不变；旧配套引擎／组件继续保留。
 
 0.22 新增一次性 `cameo_resource` 目录，迁移普通、晋升及超级武器的 PCX 图标。插件按实际 Rules／固定 ART 读取点保留文件名，宿主继续共用原文件名读取器、PCX/SHP 解码和图集；晋升 PCX 缺失时先回退普通 PCX，再走既有 SHP 路径，完全透明的 PCX 仍保持选中。安装即声明，不增加 INI 开关或逐图标 Wasm 调用。未声明保留旧模式，显式空目录选择原版。实际组件 GPU、同组件存档恢复、旧实现、七种真实资源模式及上一版组件加载检查通过。正式图标绑定在场景完成并经过共同 TypeReset 后发生，中间配置暂存不代表原生 Super 扩展跨 ClearScene 存活；整体迁移仍未完成。 声明接口见[图标目录](../api/src/cameo.rs)，实现维护在 `features/presentation/cameos.rs`。Techno 采用 class-local 原生数组身份，Super 使用独立身份空间。固定 ART 哈希和实际物理读取点进入配置阶段；缺失／空字段保持历史，字面 `none`／`<none>` 是文件名。正常与晋升共享 PCX 资源，保留 RGB565 洋红透明键、不透明黑色及 60×48 逻辑画布，不缩放源图。存档采用相同摘要的 Program 和冻结配置，恢复时不重新解释 INI。新增 hook 需要配套宿主；配置版本16、状态版本1，API v1/WIT 不变。旧引擎与组件继续保留，不承诺任意旧完整存档自动迁移。跨 Techno 类同名图标合并、动态 VFS／surface 缓存时机仍是既有边界。
 
@@ -92,7 +94,7 @@ dist/release-new/
 
 0.19 的 `long_list_readers` 是独立的安装级纯声明，在任何冷 Rules 读取前执行。参考组件直接返回 `Extended2048`，仅扩展 House `Allies`、Techno `Prerequisite` 和 `PrerequisiteOverride`；不受 `AresProduction`／`AresFaction` 开关控制。其他组件可明确返回 `Retail128`，不声明则保留宿主原模式。General 六类前置保持128，物理 INI 行限制保持511字节；原解析器、注册表和外交模块继续负责实际结果。配置版本仍为15，状态版本仍为1；完整旧存档保留对应旧引擎与原组件。
 
-接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.22.0开发分支使用配置版本16、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，整体迁移尚未完成，也未替换保留交付。
+接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.23.0开发分支使用配置版本17、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，整体迁移尚未完成，也未替换保留交付。
 
 开发分支新增`match_rules`、`effect_resource`、`effects`、`armor_resource`、`production_resource`、`configure_boundary`和`emp_resource`可选能力，以及类型隐形许可等消息字段。宿主须提供物理Rules读取点的注册类型查询、效果实例事务、原数学/动画/隐形所有者和相应保存恢复接入；只认识原有回调的宿主无法运行这版组件。组件的护盾字节与宿主效果列表分别保存，效果列表只有一个所有者。宿主接收静态策略时建立派生缓存，每次效果更新只提交经校验的有序动作。护甲增量已通过关联回归及真实资源加载，整体迁移仍在进行。SDK快照的配套引擎来源提交见`sdk/source.json`。
 
@@ -132,7 +134,7 @@ EMP 扩展位于 `features/units/emp`。新配置默认启用 `AresEMP`，历史
 
 `features/resources/startup.rs` 使用独立的可选 `startup_resources` 回调，在原有资源加载前沿分别返回 INI 引用语义、音频 IDX/BAG 配对顺序和 CSF 候选顺序。Ares 参考组件按原规则选择 `audio`、`ares`、`audio01` 至 `audio99`，以及 `ares.csf`、当前语言的 `ares_*.csf` 和 `stringtable00.csf` 至 `stringtable99.csf`。不存在的资源仍由原加载器处理；顺序、同名覆盖和语言检查沿用原模块，插件不复制解码器或目录。
 
-此回调早于游戏规则配置，不读 `[VeraFeatures]`，也不能读文件、时钟、网络或数值服务；宿主只传入查询阶段和必要的基础 CSF 语言。不要给资源加载增加一个尚依赖这些资源才能读取的 INI 开关。该启动资源增量保留了当时的配置版本14；阵营增量当时使用配置版本15；当前候选使用配置版本16，状态版本仍是1。这不代表任意 API v1 旧引擎都支持新回调。
+此回调早于游戏规则配置，不读 `[VeraFeatures]`，也不能读文件、时钟、网络或数值服务；宿主只传入查询阶段和必要的基础 CSF 语言。不要给资源加载增加一个尚依赖这些资源才能读取的 INI 开关。该启动资源增量保留了当时的配置版本14；阵营增量当时使用配置版本15；当前候选使用配置版本17，状态版本仍是1。这不代表任意 API v1 旧引擎都支持新回调。
 
 `vera-mod.json` 和需要启动能力的 Wasm 必须在音频选择前已经能被作品资源系统查到。只有声明较早可见、组件却藏在后续挂载的 MIX 时，宿主先保留待定身份：旧无启动回调组件仍可在原绑定处加载；需要新启动回调的组件会明确报错，不能补跑已经错过的加载步骤。已接纳的组件字节和声明身份在本进程固定，资源管理器恢复继续使用它们；读档仍按相同组件摘要接纳已冻结的游戏配置。
 

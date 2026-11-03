@@ -240,6 +240,7 @@ pub(crate) fn evaluate<H: Host>(
         | Context::EmpResource(_)
         | Context::FoundationResource(_)
         | Context::CameoResource(_)
+        | Context::TypeSoundResource(_)
         | Context::StartupResources(_)
         | Context::EvaCatalog
         | Context::LongListReaders

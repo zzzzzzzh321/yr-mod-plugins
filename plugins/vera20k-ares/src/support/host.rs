@@ -163,6 +163,26 @@ impl<'a, H: Host> ConfigView<'a, H> {
             .config_read("", "", "cameo-registry-view", b"null")?;
         serde_json::from_slice(&bytes).map_err(|e| format!("cameo registry view: {e}"))
     }
+    /// Optional fixed sound catalog identity. Advertised service/decoding
+    /// failures join the same admission error ledger as scalar reader errors.
+    pub fn sound_source_hash(&self) -> Option<u64> {
+        if self.host.registry("$sounds").is_empty() {
+            return None;
+        }
+        let outcome = self
+            .host
+            .config_read("", "", "sound-source-hash", b"null")
+            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()));
+        match outcome {
+            Ok(hash) => Some(hash),
+            Err(error) => {
+                self.error
+                    .borrow_mut()
+                    .get_or_insert_with(|| format!("fixed sound source: {error}"));
+                None
+            }
+        }
+    }
     fn read_source<T: Clone + Serialize + DeserializeOwned>(
         &self,
         reference: &ImmutableIniSectionRef,
@@ -348,6 +368,13 @@ impl<H: Host> Section<'_, H> {
     }
     pub fn read_pcx_filename(&self, key: &str) -> Option<String> {
         self.read(key, "pcx-filename", None::<String>)
+    }
+    pub fn read_sound_reference(
+        &self,
+        key: &str,
+        current: NullableResourceName,
+    ) -> NullableResourceName {
+        self.read(key, "sound-reference", current)
     }
     pub fn read_ares_registered_name(
         &self,

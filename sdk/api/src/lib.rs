@@ -2,6 +2,7 @@
 //! All persistent component data is returned to the host as bounded bytes.
 
 mod armor;
+mod audio;
 mod cameo;
 mod configuration;
 mod effects;
@@ -18,6 +19,10 @@ mod startup;
 pub mod timer;
 pub use armor::{
     ArmorObjectKind, ArmorResourceContext, ArmorResourcePolicy, ArmorVersePolicy, BASE_ARMOR_NAMES,
+};
+pub use audio::{
+    PromotionSoundDeclaration, TypeSoundResourceContext, TypeSoundResourcePolicy,
+    MAX_PROMOTION_SOUND_TYPES,
 };
 pub use cameo::{
     CameoReadPoint, CameoRegistryView, CameoResourceContext, CameoResourcePolicy,
@@ -115,6 +120,7 @@ pub enum HookKind {
     ConfigureFactionPass,
     LoadingThemeResource,
     CameoResource,
+    TypeSoundResource,
 }
 
 impl HookKind {
@@ -142,6 +148,7 @@ impl HookKind {
             Self::ConfigureFactionPass => "configure_faction_pass",
             Self::LoadingThemeResource => "loading_theme_resource",
             Self::CameoResource => "cameo_resource",
+            Self::TypeSoundResource => "type_sound_resource",
         }
     }
 }
@@ -259,6 +266,7 @@ pub enum Context {
     ConfigureFactionPass,
     LoadingThemeResource(LoadingThemeResourceContext),
     CameoResource(CameoResourceContext),
+    TypeSoundResource(TypeSoundResourceContext),
 }
 
 impl Context {
@@ -286,6 +294,7 @@ impl Context {
             Self::ConfigureFactionPass => HookKind::ConfigureFactionPass,
             Self::LoadingThemeResource(_) => HookKind::LoadingThemeResource,
             Self::CameoResource(_) => HookKind::CameoResource,
+            Self::TypeSoundResource(_) => HookKind::TypeSoundResource,
         }
     }
 }
@@ -349,6 +358,8 @@ pub struct Plan {
     pub loading_theme: Option<LoadingThemePolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cameo_resource: Option<CameoResourcePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub type_sound_resource: Option<TypeSoundResourcePolicy>,
 }
 
 impl Plan {
@@ -376,6 +387,7 @@ impl Plan {
             faction_resource: None,
             loading_theme: None,
             cameo_resource: None,
+            type_sound_resource: None,
         }
     }
 }
@@ -476,6 +488,9 @@ impl Request {
         if matches!(self.context, Context::CameoResource(_)) && !self.state.is_empty() {
             return Err("cameo resource queries have no entity state".into());
         }
+        if matches!(self.context, Context::TypeSoundResource(_)) && !self.state.is_empty() {
+            return Err("type sound resource queries have no entity state".into());
+        }
         let user = match &self.context {
             Context::TypeResource(context) => Some(context.user),
             Context::Effects(context) => Some(context.user),
@@ -518,7 +533,8 @@ impl Request {
             | Context::FactionResource(_)
             | Context::ConfigureFactionPass
             | Context::LoadingThemeResource(_)
-            | Context::CameoResource(_) => None,
+            | Context::CameoResource(_)
+            | Context::TypeSoundResource(_) => None,
         }
     }
 }
@@ -602,6 +618,7 @@ impl Plan {
                 | HookKind::ConfigureFactionPass
                 | HookKind::LoadingThemeResource
                 | HookKind::CameoResource
+                | HookKind::TypeSoundResource
         ) && (!self.state.is_empty()
             || self.projection.is_some()
             || !self.operations.is_empty()
@@ -669,6 +686,12 @@ impl Plan {
         if let Some(policy) = &self.cameo_resource {
             if !matches!(request.context, Context::CameoResource(_)) {
                 return Err("only cameo_resource may declare cameo art".into());
+            }
+            policy.validate()?;
+        }
+        if let Some(policy) = &self.type_sound_resource {
+            if !matches!(request.context, Context::TypeSoundResource(_)) {
+                return Err("only type_sound_resource may declare promotion sounds".into());
             }
             policy.validate()?;
         }
