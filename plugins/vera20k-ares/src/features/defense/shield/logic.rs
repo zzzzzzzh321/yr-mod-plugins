@@ -236,6 +236,7 @@ pub(crate) fn evaluate<H: Host>(
         | Context::ProductionResource(_)
         | Context::EmpResource(_)
         | Context::FoundationResource(_)
+        | Context::StartupResources(_)
         | Context::EffectResource(_)
         | Context::Effects(_) => {
             return Err("resource policy must use its own hook".into());

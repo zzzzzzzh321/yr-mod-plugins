@@ -25,6 +25,15 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
+Current development source is 0.15.0, configuration version 14 and entity state
+version 1. The 0.7.0 details below describe the retained lab delivery. The
+startup-resource increment lives in `src/features/resources/startup.rs` and uses
+optional `startup_resources` queries before Rules configuration. It returns ordered
+Include/audio/CSF recipes without Host calls or opaque gameplay state; existing
+host parsers and catalogs consume them. It requires a matching newer host and
+early resource visibility. See the [Chinese development guide](../../sdk/dev-kit/README.zh-CN.md#启动资源)
+for admission, recovery and validation limits. The overall migration remains open.
+
 ## What runs in the component
 
 For a playable six-zone test map and vanilla/compatible/overload launch modes,

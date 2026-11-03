@@ -1,11 +1,12 @@
-//! Static composition, selected by INI once per match. All code is present in
-//! one component; simulation only uses the frozen selection, never live INI.
+//! Pure resource recipes precede INI loading. Gameplay composition is then
+//! frozen per match; simulation never reads live INI.
 use crate::{
     features::{
         buildings::foundation,
         defense::{armor, shield},
         houses::survival,
         production,
+        resources::startup,
         units::{attach_effect, cloak, emp, manual_control, spotlight, type_conversion},
         weapons::{ammo_cost, empty_weapon, reload},
     },
@@ -120,7 +121,7 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.14.0".into(),
+        version: "0.15.0".into(),
         state_version: 1,
         config_version: 14,
         hooks: vec![
@@ -138,6 +139,7 @@ pub fn manifest() -> ModuleManifest {
             HookKind::ConfigureBoundary,
             HookKind::EmpResource,
             HookKind::FoundationResource,
+            HookKind::StartupResources,
         ],
     }
 }
@@ -155,6 +157,14 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
 
 pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, String> {
     request.validate()?;
+    if let Context::StartupResources(context) = &request.context {
+        // Startup recipes are installation declarations, not match features.
+        // They must not decode frozen configuration or ask Host for the INIs
+        // whose source composition/catalogs this query is about to select.
+        let mut plan = Plan::unchanged(request);
+        plan.startup_resources = Some(startup::recipe(context));
+        return Ok(plan);
+    }
     let mut config = decode_config(&request.config)?;
     if let Context::ConfigureBoundary(context) = &request.context {
         // Fresh configuration boundaries precede feature validation. Saved
@@ -398,6 +408,8 @@ mod foundation_tests;
 mod production_tests;
 #[cfg(test)]
 mod spotlight_tests;
+#[cfg(test)]
+mod startup_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

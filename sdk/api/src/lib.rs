@@ -11,6 +11,7 @@ pub mod native_string;
 mod production;
 pub mod relationship;
 mod resource;
+mod startup;
 pub mod timer;
 pub use armor::{
     ArmorObjectKind, ArmorResourceContext, ArmorResourcePolicy, ArmorVersePolicy, BASE_ARMOR_NAMES,
@@ -46,6 +47,11 @@ pub use resource::{
     TypeConversionPolicy, TypeResourceContext, TypeResourcePolicy, WEAPON_USER_AIRCRAFT,
     WEAPON_USER_BUILDING, WEAPON_USER_INFANTRY, WEAPON_USER_UNIT, WeaponResourceContext,
     WeaponResourcePolicy,
+};
+pub use startup::{
+    CsfLanguageGate, IncludeSemantics, MAX_STARTUP_RESOURCES, StartupAudioCatalog,
+    StartupAudioPair, StartupCsfCandidate, StartupCsfComposition, StartupResourceContext,
+    StartupResourcePolicy,
 };
 
 use serde::{Deserialize, Serialize};
@@ -84,6 +90,7 @@ pub enum HookKind {
     ConfigureBoundary,
     EmpResource,
     FoundationResource,
+    StartupResources,
 }
 
 impl HookKind {
@@ -103,6 +110,7 @@ impl HookKind {
             Self::ConfigureBoundary => "configure_boundary",
             Self::EmpResource => "emp_resource",
             Self::FoundationResource => "foundation_resource",
+            Self::StartupResources => "startup_resources",
         }
     }
 }
@@ -208,6 +216,7 @@ pub enum Context {
     ConfigureBoundary(ConfigureBoundaryContext),
     EmpResource(EmpResourceContext),
     FoundationResource(FoundationResourceContext),
+    StartupResources(StartupResourceContext),
 }
 
 impl Context {
@@ -227,6 +236,7 @@ impl Context {
             Self::ConfigureBoundary(_) => HookKind::ConfigureBoundary,
             Self::EmpResource(_) => HookKind::EmpResource,
             Self::FoundationResource(_) => HookKind::FoundationResource,
+            Self::StartupResources(_) => HookKind::StartupResources,
         }
     }
 }
@@ -276,6 +286,8 @@ pub struct Plan {
     pub emp_resource: Option<EmpResourcePolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub foundation_resource: Option<FoundationResourcePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub startup_resources: Option<StartupResourcePolicy>,
 }
 
 impl Plan {
@@ -296,6 +308,7 @@ impl Plan {
             production_resource: None,
             emp_resource: None,
             foundation_resource: None,
+            startup_resources: None,
         }
     }
 }
@@ -373,6 +386,11 @@ impl Request {
         if self.state.len() > MAX_STATE_BYTES || self.config.len() > MAX_CONFIG_BYTES {
             return Err("component input state/config exceeds its limit".into());
         }
+        if self.context.kind() == HookKind::StartupResources
+            && (!self.config.is_empty() || !self.state.is_empty())
+        {
+            return Err("startup recipes cannot consume gameplay configuration or state".into());
+        }
         let user = match &self.context {
             Context::TypeResource(context) => Some(context.user),
             Context::Effects(context) => Some(context.user),
@@ -407,7 +425,8 @@ impl Request {
             Context::ProductionResource(_)
             | Context::ConfigureBoundary(_)
             | Context::EmpResource(_)
-            | Context::FoundationResource(_) => None,
+            | Context::FoundationResource(_)
+            | Context::StartupResources(_) => None,
         }
     }
 }
@@ -480,6 +499,7 @@ impl Plan {
                 | HookKind::ConfigureBoundary
                 | HookKind::EmpResource
                 | HookKind::FoundationResource
+                | HookKind::StartupResources
         ) && (!self.state.is_empty()
             || self.projection.is_some()
             || !self.operations.is_empty()
@@ -514,6 +534,12 @@ impl Plan {
         if let Some(policy) = &self.foundation_resource {
             let Context::FoundationResource(context) = &request.context else {
                 return Err("only foundation_resource may select a foundation".into());
+            };
+            policy.validate_for(context)?;
+        }
+        if let Some(policy) = &self.startup_resources {
+            let Context::StartupResources(context) = &request.context else {
+                return Err("only startup_resources may select startup recipes".into());
             };
             policy.validate_for(context)?;
         }
@@ -770,6 +796,61 @@ mod tests {
         plan.state.clear();
         request.context = Context::WeaponResource(WeaponResourceContext {
             weapon_name: "GUN".into(),
+        });
+        assert!(plan.validate_for(&request).is_err());
+    }
+
+    #[test]
+    fn startup_recipes_are_bounded_stage_matched_and_have_no_gameplay_state() {
+        let mut request = Request {
+            api_version: API_VERSION,
+            context: Context::StartupResources(StartupResourceContext::AudioCatalog),
+            config: vec![],
+            state: vec![],
+        };
+        request.validate().unwrap();
+        let mut plan = Plan::unchanged(&request);
+        let pair = StartupAudioPair {
+            index: "audio.idx".into(),
+            bag: "audio.bag".into(),
+        };
+        plan.startup_resources = Some(StartupResourcePolicy::AudioCatalog {
+            catalog: StartupAudioCatalog::OrderedPairs {
+                pairs: vec![pair.clone(); 128],
+            },
+        });
+        plan.validate_for(&request).unwrap();
+        if let Some(StartupResourcePolicy::AudioCatalog {
+            catalog: StartupAudioCatalog::OrderedPairs { pairs },
+        }) = &mut plan.startup_resources
+        {
+            pairs.push(pair);
+        }
+        assert!(plan.validate_for(&request).is_err());
+        plan.startup_resources = Some(StartupResourcePolicy::StringSupplements {
+            composition: StartupCsfComposition::OrderedRecords { candidates: vec![] },
+        });
+        assert!(plan.validate_for(&request).is_err());
+        request.context = Context::StartupResources(StartupResourceContext::StringSupplements {
+            base_language: 0,
+        });
+        plan.validate_for(&request).unwrap();
+        plan.state.push(1);
+        assert!(plan.validate_for(&request).is_err());
+        plan.state.clear();
+        request.config.push(1);
+        assert!(request.validate().is_err());
+        request.config.clear();
+        plan.startup_resources = Some(StartupResourcePolicy::SourceComposition {
+            include: IncludeSemantics::HashIncludeOnce,
+        });
+        request.context = Context::StartupResources(StartupResourceContext::SourceComposition);
+        plan.validate_for(&request).unwrap();
+        request.context = Context::FoundationResource(FoundationResourceContext {
+            building: ProductionTypeRef {
+                category: ProductionObjectKind::Building,
+                ordinal: 0,
+            },
         });
         assert!(plan.validate_for(&request).is_err());
     }
