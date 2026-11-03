@@ -78,13 +78,13 @@ dist/release-new/
 └── vera-mod.json
 ```
 
-声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.17.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
+声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.18.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
 
 如果设置了 `CARGO_TARGET_DIR`，原始 Wasm 的位置随之改变；打包命令中的输入路径也应使用该目标目录。源码修改和编译过程不会自动改变作品当前对局中的组件。
 
 ## SDK 与引擎版本
 
-接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.17.0开发分支使用配置版本15、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，整体迁移尚未完成，也未替换保留交付。
+接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.18.0开发分支使用配置版本15、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，整体迁移尚未完成，也未替换保留交付。
 
 开发分支新增`match_rules`、`effect_resource`、`effects`、`armor_resource`、`production_resource`、`configure_boundary`和`emp_resource`可选能力，以及类型隐形许可等消息字段。宿主须提供物理Rules读取点的注册类型查询、效果实例事务、原数学/动画/隐形所有者和相应保存恢复接入；只认识原有回调的宿主无法运行这版组件。组件的护盾字节与宿主效果列表分别保存，效果列表只有一个所有者。宿主接收静态策略时建立派生缓存，每次效果更新只提交经校验的有序动作。护甲增量已通过关联回归及真实资源加载，整体迁移仍在进行。SDK快照的配套引擎来源提交见`sdk/source.json`。
 
@@ -145,7 +145,7 @@ EMP 扩展位于 `features/units/emp`。新配置默认启用 `AresEMP`，历史
 
 配置保留第一次初始化与父国尝试；失败的父国查找也会消耗尝试。后层缺少或写错布尔开关时保留前值，先前发生的类型分配继续保留。安装期 EVA 目录与规则中的功能选择分别确定，开关不重建目录。完整 Process 和独立 Country 读取使用不同的真实记录；独立启动投影保留自己的记录，不改变真实进程历史。读档沿用相同摘要的原组件及冻结配置，保留旧引擎／组件配套版本。
 
-本增量已通过真实组件、存档恢复、关联消费者、正式应用加载、旧实现对照、七种零售资源模式和上一版组件加载检查。0.17 接入菜单／旗帜、早晚加载画面和加载音乐，侧栏、EVA SetSide 与结算资源留在后续批次；未宣称完整 Ares、窗口／设备输出、完整联网或性能等价。组件身份及完整不透明配置仍参与 SDK 规则摘要，其中也包含表现声明。
+本增量已通过真实组件、存档恢复、关联消费者、正式应用加载、旧实现对照、七种零售资源模式和上一版组件加载检查。0.17 接入菜单／旗帜、早晚加载画面和加载音乐，0.18 继续接入侧栏、EVA SetSide、消息颜色、胜负文字和结算资源；不宣称完整 Ares、完整窗口／设备输出、完整联网或性能等价。组件身份及完整不透明配置仍参与 SDK 规则摘要，其中也包含表现声明。
 
 ## 国家菜单与加载
 
@@ -154,5 +154,15 @@ EMP 扩展位于 `features/units/emp`。新配置默认启用 `AresEMP`，历史
 Country／Side 记录只在真实类型重建时清除；ScenarioClear 仅清 Rules 全局，尚存国家的父国尝试继续保留，避免重复继承覆盖第二次主规则读取。配置版本仍为15、对象状态版本仍为1；旧组件及配套引擎继续保留。
 
 独立可选 `loading_theme_resource` 定义在 `sdk/api/src/loading.rs`，实现位于 `features/resources/loading_theme.rs`。它在 Selected→Prepared 原时点读取 root Side→Country 或已解析战役 Basic 的 `LoadingTheme`，不使用 ParentCountry 或后续合并规则。仅通过共享 `ConfigView::native_only` 调用宿主原 `name:128` 读取器，物理来源不暴露 raw 文本／目录／数值服务；名称绑定、缺名默认和播放仍归原 Theme 模块。该能力要求冷 Rules 前可见并声明 `configure_boundary`，可以独立于 `faction_resource` 和 `configure_country_read` 使用。Ares 参考组件的显式 `AresFaction=no` 选择原版加载音乐。
+
+### Side 界面与结算资源（0.18）
+
+普通引擎安装当前组件后，可在 Side 节使用现有的 `Sidebar.MixFileIndex`、`Sidebar.YuriFileNames`、`EVA.Tag`、`MessageTextColor`、`GraphicalText.*`、`CampaignScore.*` 和 `MultiplayerScore.*`。初始化、字段读取与声明仍在 `features/factions`；不在绘制时反复调用 Wasm，也不建立第二套语音队列、纹理解析器或音乐播放器。
+
+`match_rules.registered_side_ui` 是可选的全局选择：缺失保留旧组件／构建模式，`false` 使用原版，`true` 使用已注册 Side 的现有界面入口。它与某个 Side 的原版资源声明分别处理，不能根据是否缺少图片或是否只有一张图集猜测模式。参考组件复用 `AresFaction`，没有增加新的 INI 开关。切回原版侧栏时退役上一组资源；失败的读档候选沿原资源事务回滚。
+
+结算模型在当前 Side 仍有效时保存一次资源快照，后续画面与音乐使用该快照；合作任务的最终结算也保留本局快照。SkipScore、战败提示与合作分支继续按原时点选择流程，不提前执行不会显示的结算查询。组件查询失败会显示错误，保留原 Continue／战役续关清理顺序，不伪装成成功的原版结算。
+
+本轮保留固定基线的既有边界：不新增第四种侧栏几何、DialogBackground 或观察者画面。另有已存在的适配差异：比分文件名显式 `none` 当前会走原版文件回退，而原 Ares 会尝试空文件名；本次迁移保留该行为并单列残留。API v1、配置版本15和状态版本1不变，新消息仍须使用配套新版引擎；旧组件及其引擎继续保留。实际界面截图只验证资源接入，不等于原版像素、设备音频、完整联网或性能认证。
 
 本链已通过实际组件、关联规则／菜单／加载／恢复和旧 Ares 模式检查，七种真实资源模式及上一版组件加载也已通过；独立 Theme-only 的实际夹具覆盖战役路径，非战役前置由现调用链核对。未宣称完整 GPU 界面、实际扬声器、完整联机或性能等价。

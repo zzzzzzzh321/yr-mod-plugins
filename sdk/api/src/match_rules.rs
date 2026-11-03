@@ -28,6 +28,11 @@ pub struct MatchRulesPolicy {
     /// still owns Side identity and AI trigger evaluation.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub extended_ai_side_tokens: Option<bool>,
+    /// Selects the existing registered-Side UI dispatch (Scenario.Side source,
+    /// sidebar routes and EVA cache semantics). Resource names still come
+    /// from the actual Side declaration; absence keeps the host's legacy mode.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registered_side_ui: Option<bool>,
 }
 
 /// Frozen selectors for existing shared numeric and crate owners. The
@@ -68,8 +73,10 @@ mod tests {
         let old = r#"{"survival":"retail"}"#;
         let mut policy: MatchRulesPolicy = serde_json::from_str(old).unwrap();
         assert_eq!(policy.script_type_conversion, None);
+        assert_eq!(policy.registered_side_ui, None);
         assert_eq!(serde_json::to_string(&policy).unwrap(), old);
         policy.script_type_conversion = Some(false);
+        policy.registered_side_ui = Some(false);
         let bytes = serde_json::to_vec(&policy).unwrap();
         assert_eq!(
             serde_json::from_slice::<MatchRulesPolicy>(&bytes).unwrap(),
