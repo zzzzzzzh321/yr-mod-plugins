@@ -242,6 +242,7 @@ pub(crate) fn evaluate<H: Host>(
         | Context::StartupResources(_)
         | Context::EvaCatalog
         | Context::FactionResource(_)
+        | Context::LoadingThemeResource(_)
         | Context::EffectResource(_)
         | Context::Effects(_) => {
             return Err("resource policy must use its own hook".into());

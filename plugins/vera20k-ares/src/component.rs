@@ -7,7 +7,7 @@ use crate::{
         factions,
         houses::survival,
         production,
-        resources::startup,
+        resources::{startup, loading_theme},
         units::{attach_effect, cloak, emp, manual_control, spotlight, type_conversion},
         weapons::{ammo_cost, empty_weapon, reload},
     },
@@ -128,7 +128,7 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.16.0".into(),
+        version: "0.17.0".into(),
         state_version: 1,
         config_version: 15,
         hooks: vec![
@@ -151,6 +151,7 @@ pub fn manifest() -> ModuleManifest {
             HookKind::ConfigureCountryRead,
             HookKind::FactionResource,
             HookKind::ConfigureFactionPass,
+            HookKind::LoadingThemeResource,
         ],
     }
 }
@@ -182,6 +183,17 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         return Ok(plan);
     }
     let mut config = decode_config(&request.config)?;
+    if let Context::LoadingThemeResource(context) = &request.context {
+        let view = ConfigView::native_only(host);
+        let mut plan = Plan::unchanged(request);
+        plan.loading_theme = Some(loading_theme::query(
+            &view,
+            context,
+            config.features.ares_faction,
+        ));
+        view.finish()?;
+        return Ok(plan);
+    }
     if let Context::ConfigureFactionPass = &request.context {
         let view = ConfigView::new(host);
         config.factions.configure_physical(&view)?;
@@ -208,23 +220,28 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
     if let Context::ConfigureBoundary(context) = &request.context {
         // Fresh configuration boundaries precede feature validation. Saved
         // programs keep their exact frozen bytes and never replay this path.
-        let (production, emp) = match context.boundary {
+        // ScenarioClear10004EF1 recreates RulesExt while retained Side/Country
+        // objects still reach E_multi's second primary read. Their one-shot
+        // parent history dies only with the actual TypeReset6686C0 family.
+        let (production, emp, factions) = match context.boundary {
             vera_mod_api::ConfigurationBoundary::ScenarioClear => (
                 production::Configuration::default(),
                 emp::Configuration::default(),
+                std::mem::take(&mut config.factions),
             ),
             vera_mod_api::ConfigurationBoundary::TypeReset => {
                 let mut retained = std::mem::take(&mut config.production);
                 retained.reset_types();
                 let mut retained_emp = std::mem::take(&mut config.emp);
                 retained_emp.reset_types();
-                (retained, retained_emp)
+                (retained, retained_emp, factions::Configuration::default())
             }
         };
         config = Configuration {
             features: Features::for_new_match(),
             production,
             emp,
+            factions,
             ..Configuration::default()
         };
         let mut plan = Plan::unchanged(request);

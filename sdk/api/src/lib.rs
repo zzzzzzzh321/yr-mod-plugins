@@ -7,6 +7,7 @@ mod effects;
 mod emp;
 mod faction;
 mod foundation;
+mod loading;
 mod match_rules;
 pub mod native_string;
 mod production;
@@ -39,6 +40,7 @@ pub use foundation::{
     FoundationReadPoint, FoundationRegistryView, FoundationResourceContext,
     FoundationResourcePolicy, STOCK_FOUNDATION_COUNT,
 };
+pub use loading::{LoadingThemePolicy, LoadingThemeResourceContext, MAX_LOADING_THEME_NAME};
 pub use match_rules::{
     CloakRuntimePolicy, EffectRuntimePolicy, MatchRulesContext, MatchRulesPolicy, SurvivalRule,
 };
@@ -103,6 +105,7 @@ pub enum HookKind {
     ConfigureCountryRead,
     FactionResource,
     ConfigureFactionPass,
+    LoadingThemeResource,
 }
 
 impl HookKind {
@@ -127,6 +130,7 @@ impl HookKind {
             Self::ConfigureCountryRead => "configure_country_read",
             Self::FactionResource => "faction_resource",
             Self::ConfigureFactionPass => "configure_faction_pass",
+            Self::LoadingThemeResource => "loading_theme_resource",
         }
     }
 }
@@ -241,6 +245,7 @@ pub enum Context {
     /// Only actual Side/Country dispatches from a Country-only source read.
     /// Other configuration domains must not reread this source.
     ConfigureFactionPass,
+    LoadingThemeResource(LoadingThemeResourceContext),
 }
 
 impl Context {
@@ -265,6 +270,7 @@ impl Context {
             Self::ConfigureCountryRead => HookKind::ConfigureCountryRead,
             Self::FactionResource(_) => HookKind::FactionResource,
             Self::ConfigureFactionPass => HookKind::ConfigureFactionPass,
+            Self::LoadingThemeResource(_) => HookKind::LoadingThemeResource,
         }
     }
 }
@@ -322,6 +328,8 @@ pub struct Plan {
     pub country_read: Option<CountryReadPolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub faction_resource: Option<FactionResourcePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub loading_theme: Option<LoadingThemePolicy>,
 }
 
 impl Plan {
@@ -346,6 +354,7 @@ impl Plan {
             eva_catalog: None,
             country_read: None,
             faction_resource: None,
+            loading_theme: None,
         }
     }
 }
@@ -437,6 +446,12 @@ impl Request {
         {
             return Err("Country read configuration has no entity state".into());
         }
+        if let Context::LoadingThemeResource(context) = &self.context {
+            if !self.state.is_empty() {
+                return Err("loading theme queries have no entity state".into());
+            }
+            context.validate()?;
+        }
         let user = match &self.context {
             Context::TypeResource(context) => Some(context.user),
             Context::Effects(context) => Some(context.user),
@@ -476,7 +491,8 @@ impl Request {
             | Context::EvaCatalog
             | Context::ConfigureCountryRead
             | Context::FactionResource(_)
-            | Context::ConfigureFactionPass => None,
+            | Context::ConfigureFactionPass
+            | Context::LoadingThemeResource(_) => None,
         }
     }
 }
@@ -557,6 +573,7 @@ impl Plan {
                 | HookKind::ConfigureCountryRead
                 | HookKind::FactionResource
                 | HookKind::ConfigureFactionPass
+                | HookKind::LoadingThemeResource
         ) && (!self.state.is_empty()
             || self.projection.is_some()
             || !self.operations.is_empty()
@@ -609,6 +626,12 @@ impl Plan {
         if let Some(policy) = &self.faction_resource {
             let Context::FactionResource(context) = &request.context else {
                 return Err("only faction_resource may define faction declarations".into());
+            };
+            policy.validate_for(context)?;
+        }
+        if let Some(policy) = &self.loading_theme {
+            let Context::LoadingThemeResource(context) = &request.context else {
+                return Err("only loading_theme_resource may select loading names".into());
             };
             policy.validate_for(context)?;
         }

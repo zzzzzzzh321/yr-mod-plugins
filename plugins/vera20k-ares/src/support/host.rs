@@ -23,6 +23,7 @@ pub trait Host {
 pub struct ConfigView<'a, H: Host> {
     host: &'a H,
     error: RefCell<Option<String>>,
+    probe_presence: bool,
 }
 
 impl<'a, H: Host> ConfigView<'a, H> {
@@ -30,6 +31,15 @@ impl<'a, H: Host> ConfigView<'a, H> {
         Self {
             host,
             error: RefCell::new(None),
+            probe_presence: true,
+        }
+    }
+    /// Restricted physical sources provide native readers without the raw
+    /// value service used by the normal presence-probe optimization.
+    pub fn native_only(host: &'a H) -> Self {
+        Self {
+            probe_presence: false,
+            ..Self::new(host)
         }
     }
     pub fn section(&self, name: &str) -> Option<Section<'_, H>> {
@@ -242,7 +252,7 @@ impl<H: Host> Section<'_, H> {
         // JSON/WIT round trips for thousands of unused extension defaults.
         // ReadString also trims/truncates its default, so always delegate it.
         // Present empty/invalid values still go through the native reader.
-        if !reader.starts_with("string:") && !self.is_present(key) {
+        if self.view.probe_presence && !reader.starts_with("string:") && !self.is_present(key) {
             return current;
         }
         let outcome = serde_json::to_vec(&current)
