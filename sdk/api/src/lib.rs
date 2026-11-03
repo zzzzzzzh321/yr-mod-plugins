@@ -5,6 +5,7 @@ mod armor;
 mod configuration;
 mod effects;
 mod emp;
+mod faction;
 mod foundation;
 mod match_rules;
 pub mod native_string;
@@ -17,8 +18,8 @@ pub use armor::{
     ArmorObjectKind, ArmorResourceContext, ArmorResourcePolicy, ArmorVersePolicy, BASE_ARMOR_NAMES,
 };
 pub use configuration::{
-    ConfigurationBoundary, ConfigureBoundaryContext, FixedIniSource, ImmutableIniSectionRef,
-    ImmutableIniValue,
+    ConfigurationBoundary, ConfigureBoundaryContext, CountryReadPolicy, FixedIniSource,
+    ImmutableIniSectionRef, ImmutableIniValue,
 };
 pub use effects::{
     EffectAction, EffectContext, EffectControl, EffectDescriptor, EffectEvent, EffectInstanceView,
@@ -26,6 +27,13 @@ pub use effects::{
 };
 pub use emp::{
     EmpResourceContext, EmpResourcePolicy, EmpTypePolicy, EmpWarheadPolicy, NullableResourceName,
+};
+pub use faction::{
+    FactionCountryLoading, FactionCountryParadrop, FactionCountryPolicy,
+    FactionCountryPresentation, FactionLookup, FactionNullableRef, FactionReadPoint,
+    FactionReadSite, FactionReadValue, FactionRegistryPrefix, FactionRegistryView,
+    FactionResourceContext, FactionResourcePolicy, FactionSidePolicy, FactionSidePresentation,
+    MAX_FACTION_COUNTRIES, MAX_FACTION_LIST, MAX_FACTION_SIDES,
 };
 pub use foundation::{
     FoundationReadPoint, FoundationRegistryView, FoundationResourceContext,
@@ -49,9 +57,9 @@ pub use resource::{
     WeaponResourcePolicy,
 };
 pub use startup::{
-    CsfLanguageGate, IncludeSemantics, MAX_STARTUP_RESOURCES, StartupAudioCatalog,
-    StartupAudioPair, StartupCsfCandidate, StartupCsfComposition, StartupResourceContext,
-    StartupResourcePolicy,
+    CsfLanguageGate, EvaCatalogPolicy, IncludeSemantics, MAX_STARTUP_RESOURCES,
+    StartupAudioCatalog, StartupAudioPair, StartupCsfCandidate, StartupCsfComposition,
+    StartupResourceContext, StartupResourcePolicy,
 };
 
 use serde::{Deserialize, Serialize};
@@ -91,6 +99,10 @@ pub enum HookKind {
     EmpResource,
     FoundationResource,
     StartupResources,
+    EvaCatalog,
+    ConfigureCountryRead,
+    FactionResource,
+    ConfigureFactionPass,
 }
 
 impl HookKind {
@@ -111,6 +123,10 @@ impl HookKind {
             Self::EmpResource => "emp_resource",
             Self::FoundationResource => "foundation_resource",
             Self::StartupResources => "startup_resources",
+            Self::EvaCatalog => "eva_catalog",
+            Self::ConfigureCountryRead => "configure_country_read",
+            Self::FactionResource => "faction_resource",
+            Self::ConfigureFactionPass => "configure_faction_pass",
         }
     }
 }
@@ -217,6 +233,14 @@ pub enum Context {
     EmpResource(EmpResourceContext),
     FoundationResource(FoundationResourceContext),
     StartupResources(StartupResourceContext),
+    EvaCatalog,
+    /// Current physical source is available through configuration services.
+    /// No full Rules pass is invented at this pre-body frontier.
+    ConfigureCountryRead,
+    FactionResource(FactionResourceContext),
+    /// Only actual Side/Country dispatches from a Country-only source read.
+    /// Other configuration domains must not reread this source.
+    ConfigureFactionPass,
 }
 
 impl Context {
@@ -237,6 +261,10 @@ impl Context {
             Self::EmpResource(_) => HookKind::EmpResource,
             Self::FoundationResource(_) => HookKind::FoundationResource,
             Self::StartupResources(_) => HookKind::StartupResources,
+            Self::EvaCatalog => HookKind::EvaCatalog,
+            Self::ConfigureCountryRead => HookKind::ConfigureCountryRead,
+            Self::FactionResource(_) => HookKind::FactionResource,
+            Self::ConfigureFactionPass => HookKind::ConfigureFactionPass,
         }
     }
 }
@@ -288,6 +316,12 @@ pub struct Plan {
     pub foundation_resource: Option<FoundationResourcePolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub startup_resources: Option<StartupResourcePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eva_catalog: Option<EvaCatalogPolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub country_read: Option<CountryReadPolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub faction_resource: Option<FactionResourcePolicy>,
 }
 
 impl Plan {
@@ -309,6 +343,9 @@ impl Plan {
             emp_resource: None,
             foundation_resource: None,
             startup_resources: None,
+            eva_catalog: None,
+            country_read: None,
+            faction_resource: None,
         }
     }
 }
@@ -386,10 +423,19 @@ impl Request {
         if self.state.len() > MAX_STATE_BYTES || self.config.len() > MAX_CONFIG_BYTES {
             return Err("component input state/config exceeds its limit".into());
         }
-        if self.context.kind() == HookKind::StartupResources
-            && (!self.config.is_empty() || !self.state.is_empty())
+        if matches!(
+            self.context.kind(),
+            HookKind::StartupResources | HookKind::EvaCatalog
+        ) && (!self.config.is_empty() || !self.state.is_empty())
         {
             return Err("startup recipes cannot consume gameplay configuration or state".into());
+        }
+        if matches!(
+            self.context.kind(),
+            HookKind::ConfigureCountryRead | HookKind::ConfigureFactionPass
+        ) && !self.state.is_empty()
+        {
+            return Err("Country read configuration has no entity state".into());
         }
         let user = match &self.context {
             Context::TypeResource(context) => Some(context.user),
@@ -426,7 +472,11 @@ impl Request {
             | Context::ConfigureBoundary(_)
             | Context::EmpResource(_)
             | Context::FoundationResource(_)
-            | Context::StartupResources(_) => None,
+            | Context::StartupResources(_)
+            | Context::EvaCatalog
+            | Context::ConfigureCountryRead
+            | Context::FactionResource(_)
+            | Context::ConfigureFactionPass => None,
         }
     }
 }
@@ -449,7 +499,10 @@ impl Plan {
         if self.config.is_some()
             && !matches!(
                 request.context.kind(),
-                HookKind::Configure | HookKind::ConfigureBoundary
+                HookKind::Configure
+                    | HookKind::ConfigureBoundary
+                    | HookKind::ConfigureCountryRead
+                    | HookKind::ConfigureFactionPass
             )
         {
             return Err("only configuration hooks may replace module configuration".into());
@@ -500,6 +553,10 @@ impl Plan {
                 | HookKind::EmpResource
                 | HookKind::FoundationResource
                 | HookKind::StartupResources
+                | HookKind::EvaCatalog
+                | HookKind::ConfigureCountryRead
+                | HookKind::FactionResource
+                | HookKind::ConfigureFactionPass
         ) && (!self.state.is_empty()
             || self.projection.is_some()
             || !self.operations.is_empty()
@@ -540,6 +597,18 @@ impl Plan {
         if let Some(policy) = &self.startup_resources {
             let Context::StartupResources(context) = &request.context else {
                 return Err("only startup_resources may select startup recipes".into());
+            };
+            policy.validate_for(context)?;
+        }
+        if self.eva_catalog.is_some() && request.context.kind() != HookKind::EvaCatalog {
+            return Err("only eva_catalog may select the fixed speech catalog".into());
+        }
+        if self.country_read.is_some() && request.context.kind() != HookKind::ConfigureCountryRead {
+            return Err("only configure_country_read may select the pre-body reader".into());
+        }
+        if let Some(policy) = &self.faction_resource {
+            let Context::FactionResource(context) = &request.context else {
+                return Err("only faction_resource may define faction declarations".into());
             };
             policy.validate_for(context)?;
         }
@@ -601,6 +670,78 @@ pub struct DamageKernelInput {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn early_catalog_and_country_read_capabilities_keep_separate_authority() {
+        let mut request = Request {
+            api_version: API_VERSION,
+            context: Context::EvaCatalog,
+            config: vec![],
+            state: vec![],
+        };
+        request.validate().unwrap();
+        let mut plan = Plan::unchanged(&request);
+        plan.eva_catalog = Some(EvaCatalogPolicy::RegisteredVoiceColumns);
+        plan.validate_for(&request).unwrap();
+        plan.config = Some(vec![1]);
+        assert!(plan.validate_for(&request).is_err());
+        request.config.push(1);
+        assert!(request.validate().is_err());
+
+        request.context = Context::ConfigureCountryRead;
+        request.validate().unwrap();
+        plan = Plan::unchanged(&request);
+        plan.config = Some(vec![2]);
+        plan.country_read = Some(CountryReadPolicy::ExistingOnly2048);
+        plan.validate_for(&request).unwrap();
+        plan.eva_catalog = Some(EvaCatalogPolicy::Retail);
+        assert!(plan.validate_for(&request).is_err());
+        plan.eva_catalog = None;
+        plan.state.push(1);
+        assert!(plan.validate_for(&request).is_err());
+        request.state.push(1);
+        assert!(request.validate().is_err());
+    }
+
+    #[test]
+    fn faction_references_keep_null_distinct_and_validate_the_requested_family() {
+        let unset = serde_json::to_vec(&FactionNullableRef::<u32>::Unset).unwrap();
+        let null = serde_json::to_vec(&FactionNullableRef::<u32>::Null).unwrap();
+        assert_ne!(unset, null);
+        let view = FactionRegistryView {
+            sides: vec!["DUP".into(), "DUP".into()],
+            countries: vec![],
+            reads: vec![FactionReadPoint {
+                prefix: FactionRegistryPrefix {
+                    sides: 2,
+                    ..Default::default()
+                },
+                site: FactionReadSite::SideSweep { side: 1 },
+            }],
+        };
+        view.validate().unwrap();
+        let context = FactionResourceContext::Side {
+            ordinal: 1,
+            stored_id: "DUP".into(),
+        };
+        let mut policy = FactionSidePolicy::default();
+        policy.crew = FactionNullableRef::Resolved(ProductionTypeRef {
+            category: ProductionObjectKind::Unit,
+            ordinal: 0,
+        });
+        assert!(
+            FactionResourcePolicy::Side {
+                policy: Some(policy)
+            }
+            .validate_for(&context)
+            .is_err()
+        );
+        assert!(
+            FactionResourcePolicy::Country { policy: None }
+                .validate_for(&context)
+                .is_err()
+        );
+    }
 
     #[test]
     fn emp_resources_preserve_nullable_names_and_reject_simulation_writes() {

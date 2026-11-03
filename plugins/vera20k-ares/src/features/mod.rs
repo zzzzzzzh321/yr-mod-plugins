@@ -2,6 +2,7 @@
 //! Each feature owns its configuration/decisions; shared host imports live in support.
 pub(crate) mod buildings;
 pub(crate) mod defense;
+pub(crate) mod factions;
 pub(crate) mod houses;
 pub(crate) mod production;
 pub(crate) mod resources;

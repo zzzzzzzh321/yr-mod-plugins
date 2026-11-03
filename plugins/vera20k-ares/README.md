@@ -25,7 +25,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development source is 0.15.0, configuration version 14 and entity state
+Current development source is 0.16.0, configuration version 15 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
@@ -33,6 +33,16 @@ Include/audio/CSF recipes without Host calls or opaque gameplay state; existing
 host parsers and catalogs consume them. It requires a matching newer host and
 early resource visibility. See the [Chinese development guide](../../sdk/dev-kit/README.zh-CN.md#启动资源)
 for admission, recovery and validation limits. The overall migration remains open.
+
+The shared faction/gameplay increment lives in `src/features/factions/` and
+uses the separate optional `eva_catalog`, `configure_country_read`,
+`configure_faction_pass` and `faction_resource` capabilities. One initialization
+and parent-attempt history feeds existing host gameplay owners. `AresFaction`
+defaults on for new configurations; its actual Country prelude selects the reader,
+while the earlier fixed EVA layout remains separate. Real-component/save,
+consumer, application, legacy and retail loading checks passed for this bounded
+increment. The menu/loading/sidebar/EVA SetSide/score-theme presentation chain
+remains the next increment; see the [Chinese guide](../../sdk/dev-kit/README.zh-CN.md#阵营共享配置与玩法).
 
 ## What runs in the component
 

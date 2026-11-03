@@ -226,7 +226,10 @@ pub(crate) fn evaluate<H: Host>(
             });
             (next, &context.entity, context.frame)
         }
-        Context::Configure(_) | Context::ConfigureBoundary(_) => {
+        Context::Configure(_)
+        | Context::ConfigureBoundary(_)
+        | Context::ConfigureCountryRead
+        | Context::ConfigureFactionPass => {
             return Err("configuration must use the configuration hook".into());
         }
         Context::WeaponResource(_)
@@ -237,6 +240,8 @@ pub(crate) fn evaluate<H: Host>(
         | Context::EmpResource(_)
         | Context::FoundationResource(_)
         | Context::StartupResources(_)
+        | Context::EvaCatalog
+        | Context::FactionResource(_)
         | Context::EffectResource(_)
         | Context::Effects(_) => {
             return Err("resource policy must use its own hook".into());

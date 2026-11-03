@@ -4,6 +4,16 @@ use serde::{Deserialize, Serialize};
 
 pub const MAX_STARTUP_RESOURCES: usize = 128;
 
+/// A separate optional capability, not another StartupResourceContext stage:
+/// existing guests with the three-stage hook cannot decode new stages.
+/// The host creates the fixed speech catalog before Rules configuration.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum EvaCatalogPolicy {
+    Retail,
+    RegisteredVoiceColumns,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "stage", rename_all = "snake_case", deny_unknown_fields)]
 pub enum StartupResourceContext {

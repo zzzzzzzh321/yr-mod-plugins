@@ -43,6 +43,12 @@ impl Host for SpotlightHost {
         reader: &str,
         current: &[u8],
     ) -> Result<Vec<u8>, String> {
+        if reader == "faction-registry-view" {
+            // This domain fixture has no Side/Country reader dispatch.
+            assert_eq!((section, key, current), ("", "", b"null".as_slice()));
+            return serde_json::to_vec(&vera_mod_api::FactionRegistryView::default())
+                .map_err(|e| e.to_string());
+        }
         if reader == "rules-registry-view" {
             let building = |ordinal| ProductionTypeRef {
                 category: Kind::Building,

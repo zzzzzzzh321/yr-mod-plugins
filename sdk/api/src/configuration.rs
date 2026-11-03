@@ -53,3 +53,13 @@ pub enum ConfigurationBoundary {
 pub struct ConfigureBoundaryContext {
     pub boundary: ConfigurationBoundary,
 }
+
+/// Choice made before the existing Country body reads its three veteran
+/// lists. The host remains the only registry/list owner; this value is not a
+/// second persistent switch. Missing optional capability keeps the profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CountryReadPolicy {
+    RetailAllocate128,
+    ExistingOnly2048,
+}

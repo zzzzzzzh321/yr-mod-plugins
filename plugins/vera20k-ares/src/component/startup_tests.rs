@@ -25,9 +25,10 @@ fn query(context: Query) -> Plan {
 #[test]
 fn startup_source_and_audio_recipes_are_ordered_installation_declarations() {
     assert!(manifest().hooks.contains(&HookKind::StartupResources));
+    // The frozen schema now retains the additional faction configuration.
     assert_eq!(
         (manifest().state_version, manifest().config_version),
-        (1, 14)
+        (1, 15)
     );
     assert_eq!(
         query(Query::SourceComposition).startup_resources,

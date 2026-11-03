@@ -2,8 +2,9 @@
 use serde::{Serialize, de::DeserializeOwned};
 use std::cell::RefCell;
 use vera_mod_api::{
-    ArmorVersePolicy, DamageKernelInput, FoundationRegistryView, ImmutableIniSectionRef,
-    ImmutableIniValue, NullableResourceName, ProductionRegistryView, ProductionTypeRef,
+    ArmorVersePolicy, DamageKernelInput, FactionLookup, FactionReadValue, FactionRegistryView,
+    FoundationRegistryView, ImmutableIniSectionRef, ImmutableIniValue, NullableResourceName,
+    ProductionRegistryView, ProductionTypeRef,
 };
 
 pub trait Host {
@@ -60,6 +61,77 @@ impl<'a, H: Host> ConfigView<'a, H> {
             .host
             .config_read("", "", "rules-registry-view", b"null")?;
         serde_json::from_slice(&bytes).map_err(|e| format!("rules registry view: {e}"))
+    }
+    /// Actual Side/Country calls in this physical pass. No Type catalog or
+    /// interpreted extension state is copied into the guest.
+    pub fn faction_registry_view(&self) -> Result<FactionRegistryView, String> {
+        let bytes = self
+            .host
+            .config_read("", "", "faction-registry-view", b"null")?;
+        let view: FactionRegistryView =
+            serde_json::from_slice(&bytes).map_err(|e| format!("faction registry view: {e}"))?;
+        view.validate()?;
+        Ok(view)
+    }
+    /// A scoped canonical native reader. All supported readers retain current
+    /// for an absent physical key; present-empty still reaches the host.
+    pub fn faction_read<T: Clone + Serialize + DeserializeOwned>(
+        &self,
+        read: u32,
+        owner: &str,
+        key: &str,
+        reader: &str,
+        current: T,
+    ) -> T {
+        if self.host.config(owner, key).is_none() {
+            return current;
+        }
+        let input = FactionReadValue {
+            read,
+            current: current.clone(),
+        };
+        let outcome = serde_json::to_vec(&input)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| self.host.config_read(owner, key, reader, &bytes))
+            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()));
+        match outcome {
+            Ok(value) => value,
+            Err(error) => {
+                self.error
+                    .borrow_mut()
+                    .get_or_insert_with(|| format!("faction read {read} [{owner}] {key}: {error}"));
+                current
+            }
+        }
+    }
+    /// Literal lookup at this same read point, including constructor defaults.
+    /// The native registry owns Find order and sentinel handling.
+    pub fn faction_find<T: DeserializeOwned>(
+        &self,
+        read: u32,
+        name: &str,
+        family: &str,
+    ) -> Option<T> {
+        let input = FactionLookup {
+            read,
+            name: name.to_owned(),
+        };
+        let outcome = serde_json::to_vec(&input)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| {
+                self.host
+                    .config_read("", "", &format!("faction-find:{family}"), &bytes)
+            })
+            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()));
+        match outcome {
+            Ok(value) => value,
+            Err(error) => {
+                self.error.borrow_mut().get_or_insert_with(|| {
+                    format!("faction literal {read} {family} {name}: {error}")
+                });
+                None
+            }
+        }
     }
     /// An optional fixed-source configuration domain. Old decoded hosts may
     /// omit it; once discovered, service or decoding errors must propagate.

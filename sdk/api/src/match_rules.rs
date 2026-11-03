@@ -24,6 +24,10 @@ pub struct MatchRulesPolicy {
     /// a conversion target. None keeps older-component/profile behavior.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub script_type_conversion: Option<bool>,
+    /// 0 means unrestricted; other AI Side tokens select token-1. The host
+    /// still owns Side identity and AI trigger evaluation.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extended_ai_side_tokens: Option<bool>,
 }
 
 /// Frozen selectors for existing shared numeric and crate owners. The

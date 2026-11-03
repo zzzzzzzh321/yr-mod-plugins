@@ -4,6 +4,7 @@ use crate::{
     features::{
         buildings::foundation,
         defense::{armor, shield},
+        factions,
         houses::survival,
         production,
         resources::startup,
@@ -34,6 +35,7 @@ struct Features {
     ares_spotlight: bool,
     ares_type_conversion: bool,
     ares_foundation: bool,
+    ares_faction: bool,
 }
 
 impl Features {
@@ -55,6 +57,7 @@ impl Features {
             ares_spotlight: true,
             ares_type_conversion: true,
             ares_foundation: true,
+            ares_faction: true,
             ..Self::default()
         }
     }
@@ -76,6 +79,8 @@ impl Features {
         self.ares_type_conversion =
             section.read_bool("AresTypeConversion", self.ares_type_conversion);
         self.ares_foundation = section.read_bool("AresFoundation", self.ares_foundation);
+        // AresFaction is read only at the actual Country pre-body frontier.
+        // Replaying a completed pass must not reselect an earlier reader.
     }
 
     fn validate(&self) -> Result<(), String> {
@@ -115,15 +120,17 @@ pub(crate) struct Configuration {
     type_conversion: type_conversion::Configuration,
     #[serde(default)]
     foundation: foundation::Configuration,
+    #[serde(default)]
+    factions: factions::Configuration,
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.15.0".into(),
+        version: "0.16.0".into(),
         state_version: 1,
-        config_version: 14,
+        config_version: 15,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -140,6 +147,10 @@ pub fn manifest() -> ModuleManifest {
             HookKind::EmpResource,
             HookKind::FoundationResource,
             HookKind::StartupResources,
+            HookKind::EvaCatalog,
+            HookKind::ConfigureCountryRead,
+            HookKind::FactionResource,
+            HookKind::ConfigureFactionPass,
         ],
     }
 }
@@ -157,6 +168,11 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
 
 pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, String> {
     request.validate()?;
+    if let Context::EvaCatalog = &request.context {
+        let mut plan = Plan::unchanged(request);
+        plan.eva_catalog = Some(vera_mod_api::EvaCatalogPolicy::RegisteredVoiceColumns);
+        return Ok(plan);
+    }
     if let Context::StartupResources(context) = &request.context {
         // Startup recipes are installation declarations, not match features.
         // They must not decode frozen configuration or ask Host for the INIs
@@ -166,6 +182,29 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         return Ok(plan);
     }
     let mut config = decode_config(&request.config)?;
+    if let Context::ConfigureFactionPass = &request.context {
+        let view = ConfigView::new(host);
+        config.factions.configure_physical(&view)?;
+        view.finish()?;
+        let mut plan = Plan::unchanged(request);
+        plan.config = Some(serde_json::to_vec(&config).map_err(|e| e.to_string())?);
+        return Ok(plan);
+    }
+    if let Context::ConfigureCountryRead = &request.context {
+        let view = ConfigView::new(host);
+        config.features.ares_faction = view
+            .section_or_empty("VeraFeatures")
+            .read_bool("AresFaction", config.features.ares_faction);
+        view.finish()?;
+        let mut plan = Plan::unchanged(request);
+        plan.country_read = Some(if config.features.ares_faction {
+            vera_mod_api::CountryReadPolicy::ExistingOnly2048
+        } else {
+            vera_mod_api::CountryReadPolicy::RetailAllocate128
+        });
+        plan.config = Some(serde_json::to_vec(&config).map_err(|e| e.to_string())?);
+        return Ok(plan);
+    }
     if let Context::ConfigureBoundary(context) = &request.context {
         // Fresh configuration boundaries precede feature validation. Saved
         // programs keep their exact frozen bytes and never replay this path.
@@ -202,6 +241,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         config.cloak.configure(context, &view);
         config.type_conversion.configure(context, &view);
         config.foundation.configure(context, &view)?;
+        config.factions.configure(context, &view)?;
         // Armor identity and inheritance also belong to each reached physical
         // read, including layers before the module is enabled.
         config.armor.configure(context, &view);
@@ -243,6 +283,16 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
     }
     config.features.validate()?;
     match &request.context {
+        Context::EvaCatalog | Context::ConfigureCountryRead | Context::ConfigureFactionPass => {
+            unreachable!("handled before feature validation")
+        }
+        Context::FactionResource(context) => {
+            let mut plan = Plan::unchanged(request);
+            plan.state.clear();
+            plan.faction_resource =
+                Some(config.factions.query(context, config.features.ares_faction));
+            Ok(plan)
+        }
         Context::ConfigureBoundary(_) => unreachable!("handled before feature validation"),
         Context::FoundationResource(context) => {
             let mut plan = Plan::unchanged(request);
@@ -302,6 +352,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                     },
                 }),
                 script_type_conversion: Some(config.features.ares_type_conversion),
+                extended_ai_side_tokens: Some(config.features.ares_faction),
             });
             Ok(plan)
         }

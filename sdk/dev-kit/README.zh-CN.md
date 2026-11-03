@@ -78,13 +78,13 @@ dist/release-new/
 └── vera-mod.json
 ```
 
-声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.15.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`和`AresFoundation`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
+声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.16.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
 
 如果设置了 `CARGO_TARGET_DIR`，原始 Wasm 的位置随之改变；打包命令中的输入路径也应使用该目标目录。源码修改和编译过程不会自动改变作品当前对局中的组件。
 
 ## SDK 与引擎版本
 
-接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.15.0开发分支使用配置版本14、状态版本1；探照灯、类型转换、建筑占地和启动资源增量已完成各自的集中验收，整体迁移尚未完成，也未替换保留交付。
+接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.16.0开发分支使用配置版本15、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，整体迁移尚未完成，也未替换保留交付。
 
 开发分支新增`match_rules`、`effect_resource`、`effects`、`armor_resource`、`production_resource`、`configure_boundary`和`emp_resource`可选能力，以及类型隐形许可等消息字段。宿主须提供物理Rules读取点的注册类型查询、效果实例事务、原数学/动画/隐形所有者和相应保存恢复接入；只认识原有回调的宿主无法运行这版组件。组件的护盾字节与宿主效果列表分别保存，效果列表只有一个所有者。宿主接收静态策略时建立派生缓存，每次效果更新只提交经校验的有序动作。护甲增量已通过关联回归及真实资源加载，整体迁移仍在进行。SDK快照的配套引擎来源提交见`sdk/source.json`。
 
@@ -124,8 +124,25 @@ EMP 扩展位于 `features/units/emp`。新配置默认启用 `AresEMP`，历史
 
 `features/resources/startup.rs` 使用独立的可选 `startup_resources` 回调，在原有资源加载前沿分别返回 INI 引用语义、音频 IDX/BAG 配对顺序和 CSF 候选顺序。Ares 参考组件按原规则选择 `audio`、`ares`、`audio01` 至 `audio99`，以及 `ares.csf`、当前语言的 `ares_*.csf` 和 `stringtable00.csf` 至 `stringtable99.csf`。不存在的资源仍由原加载器处理；顺序、同名覆盖和语言检查沿用原模块，插件不复制解码器或目录。
 
-此回调早于游戏规则配置，不读 `[VeraFeatures]`，也不能读文件、时钟、网络或数值服务；宿主只传入查询阶段和必要的基础 CSF 语言。不要给资源加载增加一个尚依赖这些资源才能读取的 INI 开关。配置版本仍是14、状态版本仍是1；这不代表任意 API v1 旧引擎都支持新回调。
+此回调早于游戏规则配置，不读 `[VeraFeatures]`，也不能读文件、时钟、网络或数值服务；宿主只传入查询阶段和必要的基础 CSF 语言。不要给资源加载增加一个尚依赖这些资源才能读取的 INI 开关。该启动资源增量保留了当时的配置版本14；当前阵营增量使用配置版本15、状态版本仍是1。这不代表任意 API v1 旧引擎都支持新回调。
 
 `vera-mod.json` 和需要启动能力的 Wasm 必须在音频选择前已经能被作品资源系统查到。只有声明较早可见、组件却藏在后续挂载的 MIX 时，宿主先保留待定身份：旧无启动回调组件仍可在原绑定处加载；需要新启动回调的组件会明确报错，不能补跑已经错过的加载步骤。已接纳的组件字节和声明身份在本进程固定，资源管理器恢复继续使用它们；读档仍按相同组件摘要接纳已冻结的游戏配置。
 
 此增量已通过实际 Wasm 的源文件选择、音频样本解码、CSF 文本和保存恢复检查，以及正式应用资源管理、局域网下载与缓存工作线程、现有网络控制、旧 Ares 模式、七种零售资源加载模式和上一版组件检查。检查范围不包含完整联网对局、实际扬声器／窗口输出和性能对比。游戏引擎的原状态与解析所有者继续保留，整体 Ares 迁移尚未完成。
+
+## 阵营共享配置与玩法
+
+0.16.0 将既有 Side／Country 扩展放入 `plugins/vera20k-ares/src/features/factions/`：`mod.rs` 处理真实读取顺序，`side.rs` 与 `country.rs` 分别读取声明，`defaults.rs` 保存构造默认，`tests.rs` 验证共享机制。各模块继续使用同一个 `support/host.rs`，不复制 INI 解析器、类型查找、House 或随机数状态。
+
+本批接入乘员／默认伪装、AI 基地防御与扩展阵营条件、Country→Side 空降／降落伞优先级，以及 VeteranBuildings 的实际构造军衔与既有图标资格。原 Ares 标签可直接写在作品规则或地图的对应节中；新对局默认启用 `[VeraFeatures] AresFaction`，显式 `no` 选择原版策略。原有空降等支持边界继续保留。
+
+| 可选能力 | 发生时点与职责 |
+| --- | --- |
+| `eva_catalog` | 规则读取前选择固定 EVA 目录布局，使用空配置和纯启动请求。 |
+| `configure_country_read` | 当前物理 Country body 之前读取开关并选择 128／2048 容量的原有读取器。 |
+| `configure_faction_pass` | 只消费真实 Country-only 后缀，不重跑其他功能的完整配置。 |
+| `faction_resource` | 按实际 Side／Country 编号和 stored ID 查询冻结声明，宿主校验引用后绑定。 |
+
+配置保留第一次初始化与父国尝试；失败的父国查找也会消耗尝试。后层缺少或写错布尔开关时保留前值，先前发生的类型分配继续保留。安装期 EVA 目录与规则中的功能选择分别确定，开关不重建目录。完整 Process 和独立 Country 读取使用不同的真实记录；独立启动投影保留自己的记录，不改变真实进程历史。读档沿用相同摘要的原组件及冻结配置，保留旧引擎／组件配套版本。
+
+本增量已通过真实组件、存档恢复、关联消费者、正式应用加载、旧实现对照、七种零售资源模式和上一版组件加载检查。菜单／旗帜、早期加载表现、EVA SetSide、侧栏、结算与主题应用消费留在下一批；未宣称完整 Ares、窗口／设备输出、完整联网或性能等价。组件身份及完整不透明配置仍参与 SDK 规则摘要，其中也包含表现声明。

@@ -51,6 +51,12 @@ impl Host for ArtHost {
         reader: &str,
         current: &[u8],
     ) -> Result<Vec<u8>, String> {
+        if reader == "faction-registry-view" {
+            // This domain fixture has no Side/Country reader dispatch.
+            assert_eq!((section, key, current), ("", "", b"null".as_slice()));
+            return serde_json::to_vec(&vera_mod_api::FactionRegistryView::default())
+                .map_err(|e| e.to_string());
+        }
         if reader == "fixed-art-view" {
             assert_ne!(self.pass, 9, "final Configure must not reread fixed ART");
             assert_eq!((section, key, current), ("", "", b"null".as_slice()));
