@@ -4,6 +4,17 @@ use serde::{Deserialize, Serialize};
 
 pub const MAX_STARTUP_RESOURCES: usize = 128;
 
+/// Pure startup admission for the two existing external-launch identity gates.
+/// Country allocation, campaign record selection, peers and colors keep their
+/// original owners. An absent policy retains the host profile; explicit false
+/// selects the retail limit even in a legacy host.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SpawnIdentityPolicy {
+    pub extended_countries: bool,
+    pub campaign_side_byte: bool,
+}
+
 /// A separate optional capability, not another StartupResourceContext stage:
 /// existing guests with the three-stage hook cannot decode new stages.
 /// The host creates the fixed speech catalog before Rules configuration.

@@ -97,26 +97,47 @@ fn startup_csf_recipe_uses_base_language_and_keeps_supplement_admission_order() 
 }
 
 #[test]
-fn long_lists_are_a_pure_installation_declaration_without_feature_configuration() {
-    let request = Request {
-        api_version: API_VERSION,
-        context: Context::LongListReaders,
-        config: vec![],
-        state: vec![],
-    };
-    let request: Request = serde_json::from_slice(&serde_json::to_vec(&request).unwrap()).unwrap();
-    // This shared host panics on every INI, registry or numeric service call.
-    let plan = evaluate(&request, &FrozenHost).unwrap();
-    let plan: Plan = serde_json::from_slice(&serde_json::to_vec(&plan).unwrap()).unwrap();
-    plan.validate_for(&request).unwrap();
-    assert_eq!(
-        plan.long_list_readers,
-        Some(vera_mod_api::LongListReadersPolicy::Extended2048),
-    );
-    assert!(plan.config.is_none() && plan.state.is_empty());
+fn startup_capabilities_are_pure_installation_declarations_without_feature_configuration() {
+    for context in [
+        Context::LongListReaders,
+        Context::EvaCatalog,
+        Context::SpawnIdentity,
+    ] {
+        let request = Request {
+            api_version: API_VERSION,
+            context,
+            config: vec![],
+            state: vec![],
+        };
+        let request: Request =
+            serde_json::from_slice(&serde_json::to_vec(&request).unwrap()).unwrap();
+        // This shared host panics on every INI, registry or numeric service call.
+        let plan = evaluate(&request, &FrozenHost).unwrap();
+        let plan: Plan = serde_json::from_slice(&serde_json::to_vec(&plan).unwrap()).unwrap();
+        plan.validate_for(&request).unwrap();
+        match request.context {
+            Context::LongListReaders => assert_eq!(
+                plan.long_list_readers,
+                Some(vera_mod_api::LongListReadersPolicy::Extended2048),
+            ),
+            Context::EvaCatalog => assert_eq!(
+                plan.eva_catalog,
+                Some(vera_mod_api::EvaCatalogPolicy::RegisteredVoiceColumns),
+            ),
+            Context::SpawnIdentity => assert_eq!(
+                plan.spawn_identity,
+                Some(vera_mod_api::SpawnIdentityPolicy {
+                    extended_countries: true,
+                    campaign_side_byte: true,
+                }),
+            ),
+            _ => unreachable!(),
+        }
+        assert!(plan.config.is_none() && plan.state.is_empty());
+        assert!(manifest().hooks.contains(&request.context.kind()));
+    }
     let manifest = manifest();
-    assert!(manifest.hooks.contains(&HookKind::LongListReaders));
-    assert_eq!(manifest.version, "0.23.0");
+    assert_eq!(manifest.version, "0.24.0");
     assert_eq!(
         (
             manifest.api_version,

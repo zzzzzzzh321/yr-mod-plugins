@@ -244,6 +244,7 @@ pub(crate) fn evaluate<H: Host>(
         | Context::StartupResources(_)
         | Context::EvaCatalog
         | Context::LongListReaders
+        | Context::SpawnIdentity
         | Context::FactionResource(_)
         | Context::LoadingThemeResource(_)
         | Context::EffectResource(_)

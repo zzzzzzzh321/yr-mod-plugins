@@ -25,7 +25,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development source is 0.23.0, configuration version 17 and entity state
+Current development source is 0.24.0, configuration version 17 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
@@ -46,6 +46,19 @@ presentation plus optional `loading_theme_resource`. Version 0.18 connects sideb
 EVA SetSide, message colors, GraphicalText and score consumption through the same
 frozen declarations and original presentation owners. Actual-component, legacy and real-retail
 loading checks passed for the bounded Country presentation chain; see the [Chinese guide](../../sdk/dev-kit/README.zh-CN.md#阵营共享配置与玩法).
+
+Version 0.24 adds the pure `spawn_identity` declaration for the existing
+CnCNet spawn.ini Country and campaign Side width gates. The component selects
+extended Country identities and byte Side metadata before gameplay configuration.
+The single parser reads the request once; the original Ready transition approves
+it against the admitted process recipe. Absent declarations retain the host
+profile, while explicit false selects retail limits even in a legacy host.
+Country allocation, map/peer/color checks and campaign record0 remain with their
+existing owners. Actual component-to-House/Side/MCV, legacy and seven retail-mode
+checks passed. Community decoding and the shared approval helper were tested
+without installing the global Snapshot; no window/network startup or cross-platform
+run was performed. The independent network descriptor keeps its original bounds.
+Config17/state1 and API v1/WIT stay unchanged; a matching newer host is required.
 
 Version 0.23 adds one `type_sound_resource` catalog for
 `Promote.VeteranSound` / `Promote.EliteSound`. Reached Techno reads retain

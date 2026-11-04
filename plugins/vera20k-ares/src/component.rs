@@ -133,7 +133,7 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.23.0".into(),
+        version: "0.24.0".into(),
         state_version: 1,
         config_version: 17,
         hooks: vec![
@@ -154,6 +154,7 @@ pub fn manifest() -> ModuleManifest {
             HookKind::StartupResources,
             HookKind::EvaCatalog,
             HookKind::LongListReaders,
+            HookKind::SpawnIdentity,
             HookKind::ConfigureCountryRead,
             HookKind::FactionResource,
             HookKind::ConfigureFactionPass,
@@ -177,6 +178,16 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
 
 pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, String> {
     request.validate()?;
+    if let Context::SpawnIdentity = &request.context {
+        // External launch identity admission is an installed startup rule,
+        // independent of the later Country/faction configuration selection.
+        let mut plan = Plan::unchanged(request);
+        plan.spawn_identity = Some(vera_mod_api::SpawnIdentityPolicy {
+            extended_countries: true,
+            campaign_side_byte: true,
+        });
+        return Ok(plan);
+    }
     if let Context::LongListReaders = &request.context {
         // AR247 is an installed reader fix, independent of gameplay flags.
         // Select before decoding configuration or asking Host for any INI.
@@ -335,6 +346,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
     match &request.context {
         Context::EvaCatalog
         | Context::LongListReaders
+        | Context::SpawnIdentity
         | Context::ConfigureCountryRead
         | Context::ConfigureFactionPass => {
             unreachable!("handled before feature validation")

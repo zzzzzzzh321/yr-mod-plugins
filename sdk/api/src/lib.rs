@@ -71,9 +71,9 @@ pub use resource::{
     WeaponResourcePolicy,
 };
 pub use startup::{
-    CsfLanguageGate, EvaCatalogPolicy, IncludeSemantics, LongListReadersPolicy, MAX_STARTUP_RESOURCES,
-    StartupAudioCatalog, StartupAudioPair, StartupCsfCandidate, StartupCsfComposition,
-    StartupResourceContext, StartupResourcePolicy,
+    CsfLanguageGate, EvaCatalogPolicy, IncludeSemantics, LongListReadersPolicy,
+    MAX_STARTUP_RESOURCES, StartupAudioCatalog, StartupAudioPair, StartupCsfCandidate,
+    StartupCsfComposition, SpawnIdentityPolicy, StartupResourceContext, StartupResourcePolicy,
 };
 
 use serde::{Deserialize, Serialize};
@@ -121,6 +121,7 @@ pub enum HookKind {
     LoadingThemeResource,
     CameoResource,
     TypeSoundResource,
+    SpawnIdentity,
 }
 
 impl HookKind {
@@ -149,6 +150,7 @@ impl HookKind {
             Self::LoadingThemeResource => "loading_theme_resource",
             Self::CameoResource => "cameo_resource",
             Self::TypeSoundResource => "type_sound_resource",
+            Self::SpawnIdentity => "spawn_identity",
         }
     }
 }
@@ -267,6 +269,7 @@ pub enum Context {
     LoadingThemeResource(LoadingThemeResourceContext),
     CameoResource(CameoResourceContext),
     TypeSoundResource(TypeSoundResourceContext),
+    SpawnIdentity,
 }
 
 impl Context {
@@ -295,6 +298,7 @@ impl Context {
             Self::LoadingThemeResource(_) => HookKind::LoadingThemeResource,
             Self::CameoResource(_) => HookKind::CameoResource,
             Self::TypeSoundResource(_) => HookKind::TypeSoundResource,
+            Self::SpawnIdentity => HookKind::SpawnIdentity,
         }
     }
 }
@@ -360,6 +364,8 @@ pub struct Plan {
     pub cameo_resource: Option<CameoResourcePolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub type_sound_resource: Option<TypeSoundResourcePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub spawn_identity: Option<SpawnIdentityPolicy>,
 }
 
 impl Plan {
@@ -388,6 +394,7 @@ impl Plan {
             loading_theme: None,
             cameo_resource: None,
             type_sound_resource: None,
+            spawn_identity: None,
         }
     }
 }
@@ -467,7 +474,10 @@ impl Request {
         }
         if matches!(
             self.context.kind(),
-            HookKind::StartupResources | HookKind::EvaCatalog | HookKind::LongListReaders
+            HookKind::StartupResources
+                | HookKind::EvaCatalog
+                | HookKind::LongListReaders
+                | HookKind::SpawnIdentity
         ) && (!self.config.is_empty() || !self.state.is_empty())
         {
             return Err("startup recipes cannot consume gameplay configuration or state".into());
@@ -534,7 +544,8 @@ impl Request {
             | Context::ConfigureFactionPass
             | Context::LoadingThemeResource(_)
             | Context::CameoResource(_)
-            | Context::TypeSoundResource(_) => None,
+            | Context::TypeSoundResource(_)
+            | Context::SpawnIdentity => None,
         }
     }
 }
@@ -619,6 +630,7 @@ impl Plan {
                 | HookKind::LoadingThemeResource
                 | HookKind::CameoResource
                 | HookKind::TypeSoundResource
+                | HookKind::SpawnIdentity
         ) && (!self.state.is_empty()
             || self.projection.is_some()
             || !self.operations.is_empty()
@@ -694,6 +706,9 @@ impl Plan {
                 return Err("only type_sound_resource may declare promotion sounds".into());
             }
             policy.validate()?;
+        }
+        if self.spawn_identity.is_some() && !matches!(request.context, Context::SpawnIdentity) {
+            return Err("only spawn_identity may select external identity admission".into());
         }
         if let Some(plan) = &self.effects {
             let Context::Effects(context) = &request.context else {
@@ -782,6 +797,23 @@ mod tests {
             "retail_128"
         );
         plan.state.push(1);
+        assert!(plan.validate_for(&request).is_err());
+        request.config.push(1);
+        assert!(request.validate().is_err());
+
+        request.context = Context::SpawnIdentity;
+        request.config.clear();
+        request.validate().unwrap();
+        plan = Plan::unchanged(&request);
+        plan.spawn_identity = Some(SpawnIdentityPolicy {
+            extended_countries: false,
+            campaign_side_byte: false,
+        });
+        plan.validate_for(&request).unwrap();
+        let mut wrong = request.clone();
+        wrong.context = Context::EvaCatalog;
+        assert!(plan.validate_for(&wrong).is_err());
+        plan.config = Some(vec![1]);
         assert!(plan.validate_for(&request).is_err());
         request.config.push(1);
         assert!(request.validate().is_err());
