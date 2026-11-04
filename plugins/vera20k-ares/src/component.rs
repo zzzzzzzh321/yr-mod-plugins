@@ -9,6 +9,7 @@ use crate::{
         presentation::{cameos, promotion_sounds},
         production,
         resources::{startup, loading_theme},
+        superweapons,
         units::{attach_effect, cloak, emp, manual_control, spotlight, type_conversion},
         weapons::{ammo_cost, empty_weapon, reload},
     },
@@ -127,15 +128,18 @@ pub(crate) struct Configuration {
     cameos: cameos::Configuration,
     #[serde(default)]
     promotion_sounds: promotion_sounds::Configuration,
+    // Historical nonempty configuration without this domain stays unowned.
+    #[serde(default)]
+    superweapons: Option<superweapons::Configuration>,
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.27.0".into(),
+        version: "0.28.0".into(),
         state_version: 1,
-        config_version: 17,
+        config_version: 18,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -157,6 +161,8 @@ pub fn manifest() -> ModuleManifest {
             HookKind::SpawnIdentity,
             HookKind::PrismSupportDefaults,
             HookKind::SoundSampleAdmission,
+            HookKind::ConfigureSuperRead,
+            HookKind::SuperWeaponResource,
             HookKind::ConfigureCountryRead,
             HookKind::FactionResource,
             HookKind::ConfigureFactionPass,
@@ -171,6 +177,7 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
     if bytes.is_empty() {
         Ok(Configuration {
             features: Features::for_new_match(),
+            superweapons: Some(superweapons::Configuration::default()),
             ..Configuration::default()
         })
     } else {
@@ -225,6 +232,16 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         return Ok(plan);
     }
     let mut config = decode_config(&request.config)?;
+    if let Context::ConfigureSuperRead(context) = &request.context {
+        let view = ConfigView::new(host);
+        let mut plan = Plan::unchanged(request);
+        if let Some(superweapons) = config.superweapons.as_mut() {
+            plan.super_reference_read = Some(superweapons.configure_read(context, &view)?);
+            view.finish()?;
+            plan.config = Some(serde_json::to_vec(&config).map_err(|e| e.to_string())?);
+        }
+        return Ok(plan);
+    }
     if let Context::LoadingThemeResource(context) = &request.context {
         let view = ConfigView::native_only(host);
         let mut plan = Plan::unchanged(request);
@@ -300,6 +317,9 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             factions,
             cameos,
             promotion_sounds,
+            // Native SWTypeExt state is recreated at these real boundaries.
+            // Only subsequent ConfigureSuperRead visits initialize each Type.
+            superweapons: Some(superweapons::Configuration::default()),
             ..Configuration::default()
         };
         let mut plan = Plan::unchanged(request);
@@ -318,6 +338,9 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         config.foundation.configure(context, &view)?;
         config.factions.configure(context, &view)?;
         config.cameos.configure(context, &view)?;
+        if let Some(superweapons) = config.superweapons.as_mut() {
+            superweapons.configure(context, &view)?;
+        }
         // Armor identity and inheritance also belong to each reached physical
         // read, including layers before the module is enabled.
         config.armor.configure(context, &view);
@@ -365,6 +388,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         | Context::SpawnIdentity
         | Context::PrismSupportDefaults
         | Context::SoundSampleAdmission
+        | Context::ConfigureSuperRead(_)
         | Context::ConfigureCountryRead
         | Context::ConfigureFactionPass => {
             unreachable!("handled before feature validation")
@@ -374,6 +398,16 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             plan.state.clear();
             plan.faction_resource =
                 Some(config.factions.query(context, config.features.ares_faction));
+            Ok(plan)
+        }
+        Context::SuperWeaponResource(_) => {
+            let mut plan = Plan::unchanged(request);
+            plan.state.clear();
+            plan.superweapon_resource = config
+                .superweapons
+                .as_ref()
+                .map(|value| value.query())
+                .transpose()?;
             Ok(plan)
         }
         Context::ConfigureBoundary(_) => unreachable!("handled before feature validation"),

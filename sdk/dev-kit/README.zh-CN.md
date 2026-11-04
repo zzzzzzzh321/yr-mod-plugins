@@ -78,11 +78,17 @@ dist/release-new/
 └── vera-mod.json
 ```
 
-声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.27.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
+声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.28.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
 
 如果设置了 `CARGO_TARGET_DIR`，原始 Wasm 的位置随之改变；打包命令中的输入路径也应使用该目标目录。源码修改和编译过程不会自动改变作品当前对局中的组件。
 
 ## SDK 与引擎版本
+
+0.28 已完成本阶段既有 Ares 子集的外置迁移，完整 Ares 兼容仍未完成。接口见[超武声明](../api/src/superweapon.rs)。
+
+0.28 将引擎已有的超武扩展接入 `features/superweapons/`。`configure_super_read` 在原规则读取时点处理首次访问和 `SW.Warhead` 引用；`superweapon_resource` 在配置结束后一次性提供挂载、使用条件、初始/虚拟充能、费用、通用弹头、单位投送及演出声明。作者直接使用既有 Ares INI 标签，无需额外启用标签。Host 共用原数值、列表和固定音频目录读取接口；计时、发射次数、钱包、两阶段选择和投送队列继续由原引擎所有者维护，Wasm 不逐帧改写这些状态。
+
+此候选的配置版本为18、实体状态版本为1，API v1 与 WIT 名称保持不变，但两个新增接口需要配套宿主。旧组件未声明时沿用宿主模式；显式默认声明选择原版行为。存档恢复使用存档中的精确组件与冻结配置，原始组件及配套引擎应与旧存档一起保留。范围限于引擎原有的超武子集；完整 charge-drain、新超武类型和更多 AI 选点方式仍未由本次迁移实现。
 
 0.27 新增纯启动声明 `sound_sample_admission`，在固定 SOUNDMD 目录首次读取前选择未索引样本的接纳方式。参考组件直接声明 true，合法散装 WAV 可沿原有样本选择与解码流程加载；无需额外 INI 开关。未声明沿用宿主模式，显式 false 在存在音频索引时要求样本已登记。声音目录、资源查找和解码器仍由宿主统一维护，资源重新接入继续使用原冻结目录。相同 INI 摘要不代表接纳模式相同，恢复仍依赖精确组件身份与固定资源配方。配置17／状态1／API v1／WIT不变，新声明需要配套宿主；未进行音频设备输出或跨平台实跑。
 
@@ -94,7 +100,7 @@ dist/release-new/
 
 0.23 新增一次性 `type_sound_resource` 目录，接通 `Promote.VeteranSound`／`Promote.EliteSound`。插件沿实际 Techno 读取点保留继承全局、静音和已注册音效三态，宿主校验固定 SOUNDMD 来源及原生类型身份后一次绑定；军衔、位置音效和 EVA 仍由原机制维护。已注册的字面 `none` 是音效，静音仅关闭音效、不关闭 EVA。未声明保留旧模式，显式空目录在旧构建中也使用全局音效。不增加 INI 开关或逐次晋升 Wasm 调用。实际晋升到派发、存档后继续升级、来源变化拒绝、旧实现、共享 PCX GPU 及七种真实资源模式检查通过；未测试音频设备实际播放，仍需配套新版宿主。 接口见[类型音效目录](../api/src/audio.rs)，实现维护在 `features/presentation/promotion_sounds.rs`，Host 薄适配仍集中在 `support/host.rs`。音效必须先由实际 SOUNDMD 的 `[SoundList]` 注册；未知、缺失、空值保留上次声明，未注册的 `none`／`<none>` 才表示静音。声音目录在首次配置前固定，同一 Arc 贯穿独立投影、类型重置和恢复；保存不序列化目录，正式恢复重绑后校验来源，即使名称与编号相同也不接受不同输入。新增能力使用配置版本17、状态版本1，API v1/WIT不变；旧配套引擎／组件继续保留。
 
-0.22 新增一次性 `cameo_resource` 目录，迁移普通、晋升及超级武器的 PCX 图标。插件按实际 Rules／固定 ART 读取点保留文件名，宿主继续共用原文件名读取器、PCX/SHP 解码和图集；晋升 PCX 缺失时先回退普通 PCX，再走既有 SHP 路径，完全透明的 PCX 仍保持选中。安装即声明，不增加 INI 开关或逐图标 Wasm 调用。未声明保留旧模式，显式空目录选择原版。实际组件 GPU、同组件存档恢复、旧实现、七种真实资源模式及上一版组件加载检查通过。正式图标绑定在场景完成并经过共同 TypeReset 后发生，中间配置暂存不代表原生 Super 扩展跨 ClearScene 存活；整体迁移仍未完成。 声明接口见[图标目录](../api/src/cameo.rs)，实现维护在 `features/presentation/cameos.rs`。Techno 采用 class-local 原生数组身份，Super 使用独立身份空间。固定 ART 哈希和实际物理读取点进入配置阶段；缺失／空字段保持历史，字面 `none`／`<none>` 是文件名。正常与晋升共享 PCX 资源，保留 RGB565 洋红透明键、不透明黑色及 60×48 逻辑画布，不缩放源图。存档采用相同摘要的 Program 和冻结配置，恢复时不重新解释 INI。新增 hook 需要配套宿主；配置版本16、状态版本1，API v1/WIT 不变。旧引擎与组件继续保留，不承诺任意旧完整存档自动迁移。跨 Techno 类同名图标合并、动态 VFS／surface 缓存时机仍是既有边界。
+0.22 新增一次性 `cameo_resource` 目录，迁移普通、晋升及超级武器的 PCX 图标。插件按实际 Rules／固定 ART 读取点保留文件名，宿主继续共用原文件名读取器、PCX/SHP 解码和图集；晋升 PCX 缺失时先回退普通 PCX，再走既有 SHP 路径，完全透明的 PCX 仍保持选中。安装即声明，不增加 INI 开关或逐图标 Wasm 调用。未声明保留旧模式，显式空目录选择原版。实际组件 GPU、同组件存档恢复、旧实现、七种真实资源模式及上一版组件加载检查通过。正式图标绑定在场景完成并经过共同 TypeReset 后发生，中间配置暂存不代表原生 Super 扩展跨 ClearScene 存活；Ares 完整文档兼容仍未完成。 声明接口见[图标目录](../api/src/cameo.rs)，实现维护在 `features/presentation/cameos.rs`。Techno 采用 class-local 原生数组身份，Super 使用独立身份空间。固定 ART 哈希和实际物理读取点进入配置阶段；缺失／空字段保持历史，字面 `none`／`<none>` 是文件名。正常与晋升共享 PCX 资源，保留 RGB565 洋红透明键、不透明黑色及 60×48 逻辑画布，不缩放源图。存档采用相同摘要的 Program 和冻结配置，恢复时不重新解释 INI。新增 hook 需要配套宿主；配置版本16、状态版本1，API v1/WIT 不变。旧引擎与组件继续保留，不承诺任意旧完整存档自动迁移。跨 Techno 类同名图标合并、动态 VFS／surface 缓存时机仍是既有边界。
 
 0.21 的 `match_rules.anim_damage` 同样是安装级静态策略：`use_source_house` 优先读取动画已有所属方，没有时读取附着 Techno 的所属方；`prefer_art_warhead` 优先消费原固定 ART 的 Warhead 引用，空引用仍用自身 INVISO/C4Warhead 或 FlameDamage2 回退。原加载器会为未列出的引用创建默认弹头，不应把“未注册列表”当成“查找失败”。伤害累积、计时、扣量和 AreaDamage 仍由原引擎拥有，House 不替代攻击对象，视觉 AnimRemap 不设置伤害所属方。未声明保留原模式，显式 false 覆盖旧内置模式，参考组件安装即声明两项 true，不依赖功能 INI 开关。实际组件对照、保存字段与 Program 接纳、旧构建及针对性资源加载检查通过；不包含 Weapon=／Damage.Delay=，整轮完整组合检查仍待收口。配置版本15、状态版本1、API v1 不变，但需要提供这些策略的新宿主。
 
@@ -102,9 +108,9 @@ dist/release-new/
 
 0.19 的 `long_list_readers` 是独立的安装级纯声明，在任何冷 Rules 读取前执行。参考组件直接返回 `Extended2048`，仅扩展 House `Allies`、Techno `Prerequisite` 和 `PrerequisiteOverride`；不受 `AresProduction`／`AresFaction` 开关控制。其他组件可明确返回 `Retail128`，不声明则保留宿主原模式。General 六类前置保持128，物理 INI 行限制保持511字节；原解析器、注册表和外交模块继续负责实际结果。配置版本仍为15，状态版本仍为1；完整旧存档保留对应旧引擎与原组件。
 
-接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.27.0开发分支使用配置版本17、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，整体迁移尚未完成，也未替换保留交付。
+接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.28.0开发分支使用配置版本18、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，Ares 完整文档兼容尚未完成，也未替换保留交付。
 
-开发分支新增`match_rules`、`effect_resource`、`effects`、`armor_resource`、`production_resource`、`configure_boundary`和`emp_resource`可选能力，以及类型隐形许可等消息字段。宿主须提供物理Rules读取点的注册类型查询、效果实例事务、原数学/动画/隐形所有者和相应保存恢复接入；只认识原有回调的宿主无法运行这版组件。组件的护盾字节与宿主效果列表分别保存，效果列表只有一个所有者。宿主接收静态策略时建立派生缓存，每次效果更新只提交经校验的有序动作。护甲增量已通过关联回归及真实资源加载，整体迁移仍在进行。SDK快照的配套引擎来源提交见`sdk/source.json`。
+开发分支新增`match_rules`、`effect_resource`、`effects`、`armor_resource`、`production_resource`、`configure_boundary`和`emp_resource`可选能力，以及类型隐形许可等消息字段。宿主须提供物理Rules读取点的注册类型查询、效果实例事务、原数学/动画/隐形所有者和相应保存恢复接入；只认识原有回调的宿主无法运行这版组件。组件的护盾字节与宿主效果列表分别保存，效果列表只有一个所有者。宿主接收静态策略时建立派生缓存，每次效果更新只提交经校验的有序动作。护甲增量已通过关联回归及真实资源加载，Ares 完整文档兼容仍未完成。SDK快照的配套引擎来源提交见`sdk/source.json`。
 
 修改现有接口能够表达的算法，可以只重编插件。需要新的引擎能力时，应先扩展 SDK 契约和引擎接入点，再使用匹配的 SDK 构建插件；独立编译并不表示所有未来 SDK 与引擎版本自动兼容。
 
@@ -126,7 +132,7 @@ cargo metadata --locked --offline --format-version 1
 
 高于主/副武器的 NoAmmoWeapon 索引还需要能完整保存建筑延迟武器索引的配套宿主。API编号或WIT包名相同，不代表旧宿主具有新回调、消息字段或处理修复；按来源提交与配套验收包核对。新增宿主保存字段会改变完整存档布局，保留旧引擎和旧组件供旧存档使用，不能把护盾状态版本仍为1理解成完整存档自动兼容。
 
-生产扩展在 `features/production` 按组、工厂资格与公共目录索引组织；没有第二份 House 计数、工厂队列或永久计划。配置边界由宿主真实流程提供：普通场景清空，类型重建保留组件自身的全局控制，读取存档直接采用保存配置。跨场景种子必须匹配完全相同的组件内容与清单，更新组件后应开启新对局。0.10.0 普通引擎新增国家来源与计划字段，完整存档布局随之变化；旧存档保留相应旧引擎和组件，不自动转换。生产增量已通过关联回归、旧实现对照、正式读档和七种真实资源加载检查；整体迁移尚未完成。
+生产扩展在 `features/production` 按组、工厂资格与公共目录索引组织；没有第二份 House 计数、工厂队列或永久计划。配置边界由宿主真实流程提供：普通场景清空，类型重建保留组件自身的全局控制，读取存档直接采用保存配置。跨场景种子必须匹配完全相同的组件内容与清单，更新组件后应开启新对局。0.10.0 普通引擎新增国家来源与计划字段，完整存档布局随之变化；旧存档保留相应旧引擎和组件，不自动转换。生产增量已通过关联回归、旧实现对照、正式读档和七种真实资源加载检查；Ares 完整文档兼容尚未完成。
 
 EMP 扩展位于 `features/units/emp`。新配置默认启用 `AresEMP`，历史冻结配置缺少该开关时保持关闭；`[VeraFeatures] AresEMP=no` 明确停用。插件只发布静态声明，计数、停用状态和动画引用仍只有原宿主所有者。任务名称、阈值和注册动画由共享 Host 调用原读取器，类型动画的继承／清空／指定三态不会合并。TypeReset 保留 EMP 全局任务配置；普通场景清空，读档使用保存配置。EMP 增量已通过关联行为、旧实现对照、正式读档和七种真实资源加载检查。完整存档新增触发器冻结策略，旧存档需保留对应旧引擎和组件；整体迁移继续进行。
 

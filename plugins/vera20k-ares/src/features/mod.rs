@@ -7,5 +7,6 @@ pub(crate) mod houses;
 pub(crate) mod presentation;
 pub(crate) mod production;
 pub(crate) mod resources;
+pub(crate) mod superweapons;
 pub(crate) mod units;
 pub(crate) mod weapons;

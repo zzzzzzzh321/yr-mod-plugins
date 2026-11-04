@@ -72,6 +72,50 @@ impl<'a, H: Host> ConfigView<'a, H> {
             .config_read("", "", "rules-registry-view", b"null")?;
         serde_json::from_slice(&bytes).map_err(|e| format!("rules registry view: {e}"))
     }
+    pub fn superweapon_registry_view(
+        &self,
+    ) -> Result<vera_mod_api::SuperWeaponRegistryView, String> {
+        let bytes = self
+            .host
+            .config_read("", "", "superweapon-registry-view", b"null")?;
+        serde_json::from_slice(&bytes).map_err(|e| format!("SuperWeapon registry view: {e}"))
+    }
+
+    pub fn eva_source_hash(&self) -> Result<u64, String> {
+        let bytes = self.host.config_read("", "", "eva-source-hash", b"null")?;
+        serde_json::from_slice(&bytes).map_err(|e| format!("fixed EVA source: {e}"))
+    }
+
+    /// An empty fixed catalog still has a source identity.
+    pub fn required_sound_source_hash(&self) -> Result<u64, String> {
+        let bytes = self.host.config_read("", "", "sound-source-hash", b"null")?;
+        serde_json::from_slice(&bytes).map_err(|e| format!("fixed sound source: {e}"))
+    }
+
+    pub fn eva_find(&self, name: &str) -> Result<Option<String>, String> {
+        let input = serde_json::to_vec(name).map_err(|e| e.to_string())?;
+        let bytes = self.host.config_read("", "", "eva-find", &input)?;
+        serde_json::from_slice(&bytes).map_err(|e| format!("fixed EVA lookup: {e}"))
+    }
+
+    /// Always call the scoped reader: missing physical keys may still need the
+    /// retained source, and source/host failures must reject configuration.
+    pub fn superweapon_read<I: Serialize, O: DeserializeOwned>(
+        &self,
+        read: u32,
+        owner: &str,
+        key: &str,
+        reader: &str,
+        current: I,
+    ) -> Result<O, String> {
+        let input = vera_mod_api::SuperReadValue { read, current };
+        let bytes = serde_json::to_vec(&input).map_err(|e| e.to_string())?;
+        let bytes = self
+            .host
+            .config_read(owner, key, reader, &bytes)
+            .map_err(|e| format!("SuperWeapon read {read} [{owner}] {key}: {e}"))?;
+        serde_json::from_slice(&bytes).map_err(|e| format!("SuperWeapon reader {reader}: {e}"))
+    }
     /// Actual Side/Country calls in this physical pass. No Type catalog or
     /// interpreted extension state is copied into the guest.
     pub fn faction_registry_view(&self) -> Result<FactionRegistryView, String> {
@@ -421,6 +465,30 @@ impl<H: Host> Section<'_, H> {
     pub fn read_comma_list(&self, key: &str, capacity: usize) -> Option<Vec<String>> {
         self.read(key, &format!("comma-list:{capacity}"), None::<Vec<String>>)
     }
+    /// ReadString2048/comma-only mask parser with this feature's ordered
+    /// vocabulary. None retains the caller's state; Some(0) is a valid read.
+    /// Host/protocol failures are recorded and reject ConfigView::finish.
+    pub fn read_comma_mask(&self, key: &str, tokens: &[(&str, u32)]) -> Option<u32> {
+        let outcome = serde_json::to_vec(tokens)
+            .map_err(|e| e.to_string())
+            .and_then(|bytes| {
+                self.view
+                    .host
+                    .config_read(&self.name, key, "comma-mask:2048", &bytes)
+            })
+            .and_then(|bytes| serde_json::from_slice(&bytes).map_err(|e| e.to_string()));
+        match outcome {
+            Ok(value) => value,
+            Err(error) => {
+                self.view
+                    .error
+                    .borrow_mut()
+                    .get_or_insert_with(|| format!("[{}] {key} comma-mask: {error}", self.name));
+                None
+            }
+        }
+    }
+
     pub fn read_bool_prefix_reverse3(&self, key: &str, current: [bool; 3]) -> [bool; 3] {
         self.read(key, "bool-prefix-reverse3", current)
     }

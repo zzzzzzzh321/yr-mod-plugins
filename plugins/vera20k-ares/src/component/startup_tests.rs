@@ -25,10 +25,10 @@ fn query(context: Query) -> Plan {
 #[test]
 fn startup_source_and_audio_recipes_are_ordered_installation_declarations() {
     assert!(manifest().hooks.contains(&HookKind::StartupResources));
-    // The frozen schema now retains Type-owned promotion sound declarations.
+    // The frozen schema now retains the optional SuperWeapon read domain.
     assert_eq!(
         (manifest().state_version, manifest().config_version),
-        (1, 17)
+        (1, 18)
     );
     assert_eq!(
         query(Query::SourceComposition).startup_resources,
@@ -141,13 +141,13 @@ fn startup_capabilities_are_pure_installation_declarations_without_feature_confi
         assert!(manifest().hooks.contains(&request.context.kind()));
     }
     let manifest = manifest();
-    assert_eq!(manifest.version, "0.27.0");
+    assert_eq!(manifest.version, "0.28.0");
     assert_eq!(
         (
             manifest.api_version,
             manifest.config_version,
             manifest.state_version
         ),
-        (1, 17, 1)
+        (1, 18, 1)
     );
 }

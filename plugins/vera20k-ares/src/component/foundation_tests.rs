@@ -51,6 +51,11 @@ impl Host for ArtHost {
         reader: &str,
         current: &[u8],
     ) -> Result<Vec<u8>, String> {
+        if let Some(reply) =
+            crate::component::tests::empty_super_sources(section, key, reader, current)
+        {
+            return reply;
+        }
         if reader == "faction-registry-view" {
             // This domain fixture has no Side/Country reader dispatch.
             assert_eq!((section, key, current), ("", "", b"null".as_slice()));

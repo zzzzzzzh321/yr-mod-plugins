@@ -40,6 +40,11 @@ impl Host for DecodedHost {
         reader: &str,
         current: &[u8],
     ) -> Result<Vec<u8>, String> {
+        if let Some(reply) =
+            crate::component::tests::empty_super_sources(section, key, reader, current)
+        {
+            return reply;
+        }
         if reader == "faction-registry-view" {
             return serde_json::to_vec(&vera_mod_api::FactionRegistryView::default())
                 .map_err(|e| e.to_string());

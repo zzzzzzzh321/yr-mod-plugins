@@ -16,6 +16,7 @@ mod production;
 pub mod relationship;
 mod resource;
 mod startup;
+mod superweapon;
 pub mod timer;
 pub use armor::{
     ArmorObjectKind, ArmorResourceContext, ArmorResourcePolicy, ArmorVersePolicy, BASE_ARMOR_NAMES,
@@ -76,6 +77,15 @@ pub use startup::{
     StartupCsfComposition, SpawnIdentityPolicy, StartupResourceContext, StartupResourcePolicy,
 };
 
+pub use superweapon::{
+    ConfigureSuperReadContext, SuperReadValue, SuperReferenceRead, SuperWeaponReadPoint,
+    SuperWeaponReadSite, SuperWeaponRegistryView, SuperWeaponResourceContext,
+    SuperWeaponResourcePolicy, SuperWeaponSemantics, SuperWeaponAvailabilityPolicy,
+    SuperWeaponChargePolicy, SuperWeaponPresentationPolicy, SuperWeaponTargetingPolicy,
+    SuperWeaponDeliveryOwner, SuperWeaponPayloadPolicy, SuperWeaponDeclaration,
+    SuperWeaponProviderDeclaration,
+};
+
 use serde::{Deserialize, Serialize};
 
 pub const API_VERSION: u32 = 1;
@@ -124,6 +134,8 @@ pub enum HookKind {
     SpawnIdentity,
     PrismSupportDefaults,
     SoundSampleAdmission,
+    ConfigureSuperRead,
+    SuperWeaponResource,
 }
 
 impl HookKind {
@@ -155,6 +167,8 @@ impl HookKind {
             Self::SpawnIdentity => "spawn_identity",
             Self::PrismSupportDefaults => "prism_support_defaults",
             Self::SoundSampleAdmission => "sound_sample_admission",
+            Self::ConfigureSuperRead => "configure_super_read",
+            Self::SuperWeaponResource => "superweapon_resource",
         }
     }
 }
@@ -273,6 +287,7 @@ pub enum Context {
     LoadingThemeResource(LoadingThemeResourceContext),
     CameoResource(CameoResourceContext),
     TypeSoundResource(TypeSoundResourceContext),
+    SuperWeaponResource(SuperWeaponResourceContext),
     SpawnIdentity,
     /// Choose the existing Prism ReadDouble default units before cold Rules.
     /// This pure declaration has no gameplay configuration or entity state.
@@ -280,6 +295,8 @@ pub enum Context {
     /// Choose sample admission before the fixed SOUNDMD catalog is read.
     /// This pure declaration cannot read gameplay configuration or state.
     SoundSampleAdmission,
+    /// One reached native SuperWeapon visit, before its reference allocation.
+    ConfigureSuperRead(ConfigureSuperReadContext),
 }
 
 impl Context {
@@ -308,9 +325,11 @@ impl Context {
             Self::LoadingThemeResource(_) => HookKind::LoadingThemeResource,
             Self::CameoResource(_) => HookKind::CameoResource,
             Self::TypeSoundResource(_) => HookKind::TypeSoundResource,
+            Self::SuperWeaponResource(_) => HookKind::SuperWeaponResource,
             Self::SpawnIdentity => HookKind::SpawnIdentity,
             Self::PrismSupportDefaults => HookKind::PrismSupportDefaults,
             Self::SoundSampleAdmission => HookKind::SoundSampleAdmission,
+            Self::ConfigureSuperRead(_) => HookKind::ConfigureSuperRead,
         }
     }
 }
@@ -377,6 +396,8 @@ pub struct Plan {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub type_sound_resource: Option<TypeSoundResourcePolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub superweapon_resource: Option<SuperWeaponResourcePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spawn_identity: Option<SpawnIdentityPolicy>,
     /// true normalizes the retained integer percentage before ReadDouble;
     /// false selects retail units, and absence preserves the host profile.
@@ -387,6 +408,10 @@ pub struct Plan {
     /// profile. The original decoder remains responsible for loading samples.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sound_sample_admission: Option<bool>,
+    /// None preserves the profile. The host executes this bounded action at
+    /// the current native read point, before committing the new configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub super_reference_read: Option<SuperReferenceRead>,
 }
 
 impl Plan {
@@ -415,9 +440,11 @@ impl Plan {
             loading_theme: None,
             cameo_resource: None,
             type_sound_resource: None,
+            superweapon_resource: None,
             spawn_identity: None,
             prism_support_defaults: None,
             sound_sample_admission: None,
+            super_reference_read: None,
         }
     }
 }
@@ -509,10 +536,15 @@ impl Request {
         }
         if matches!(
             self.context.kind(),
-            HookKind::ConfigureCountryRead | HookKind::ConfigureFactionPass
+            HookKind::ConfigureCountryRead
+                | HookKind::ConfigureFactionPass
+                | HookKind::ConfigureSuperRead
         ) && !self.state.is_empty()
         {
-            return Err("Country read configuration has no entity state".into());
+            return Err("early configuration has no entity state".into());
+        }
+        if let Context::ConfigureSuperRead(context) = &self.context {
+            context.validate()?;
         }
         if let Context::LoadingThemeResource(context) = &self.context {
             if !self.state.is_empty() {
@@ -523,7 +555,11 @@ impl Request {
         if matches!(self.context, Context::CameoResource(_)) && !self.state.is_empty() {
             return Err("cameo resource queries have no entity state".into());
         }
-        if matches!(self.context, Context::TypeSoundResource(_)) && !self.state.is_empty() {
+        if matches!(
+            self.context,
+            Context::TypeSoundResource(_) | Context::SuperWeaponResource(_)
+        ) && !self.state.is_empty()
+        {
             return Err("type sound resource queries have no entity state".into());
         }
         let user = match &self.context {
@@ -570,9 +606,11 @@ impl Request {
             | Context::LoadingThemeResource(_)
             | Context::CameoResource(_)
             | Context::TypeSoundResource(_)
+            | Context::SuperWeaponResource(_)
             | Context::SpawnIdentity
             | Context::PrismSupportDefaults
-            | Context::SoundSampleAdmission => None,
+            | Context::SoundSampleAdmission
+            | Context::ConfigureSuperRead(_) => None,
         }
     }
 }
@@ -599,6 +637,7 @@ impl Plan {
                     | HookKind::ConfigureBoundary
                     | HookKind::ConfigureCountryRead
                     | HookKind::ConfigureFactionPass
+                    | HookKind::ConfigureSuperRead
             )
         {
             return Err("only configuration hooks may replace module configuration".into());
@@ -657,9 +696,11 @@ impl Plan {
                 | HookKind::LoadingThemeResource
                 | HookKind::CameoResource
                 | HookKind::TypeSoundResource
+                | HookKind::SuperWeaponResource
                 | HookKind::SpawnIdentity
                 | HookKind::PrismSupportDefaults
                 | HookKind::SoundSampleAdmission
+                | HookKind::ConfigureSuperRead
         ) && (!self.state.is_empty()
             || self.projection.is_some()
             || !self.operations.is_empty()
@@ -730,6 +771,12 @@ impl Plan {
             }
             policy.validate()?;
         }
+        if let Some(policy) = &self.superweapon_resource {
+            if !matches!(request.context, Context::SuperWeaponResource(_)) {
+                return Err("only superweapon_resource may declare SuperWeapon resources".into());
+            }
+            policy.validate()?;
+        }
         if let Some(policy) = &self.type_sound_resource {
             if !matches!(request.context, Context::TypeSoundResource(_)) {
                 return Err("only type_sound_resource may declare promotion sounds".into());
@@ -748,6 +795,14 @@ impl Plan {
             && !matches!(request.context, Context::SoundSampleAdmission)
         {
             return Err("only sound_sample_admission may select fixed sample admission".into());
+        }
+        if let Some(action) = self.super_reference_read {
+            let Context::ConfigureSuperRead(context) = &request.context else {
+                return Err("only configure_super_read may request a native reference read".into());
+            };
+            if action == SuperReferenceRead::WarheadFromCurrentSection && !context.body_read {
+                return Err("an absent SuperWeapon body cannot resolve a reference".into());
+            }
         }
         if let Some(plan) = &self.effects {
             let Context::Effects(context) = &request.context else {

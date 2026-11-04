@@ -18,6 +18,37 @@ impl Host for FrozenHost {
     }
 }
 
+/// Older domain fixtures have no Super definitions, but still expose explicit
+/// empty fixed catalogs. Unknown services remain their caller's errors.
+pub(super) fn empty_super_sources(
+    section: &str,
+    key: &str,
+    reader: &str,
+    current: &[u8],
+) -> Option<Result<Vec<u8>, String>> {
+    if !matches!(
+        reader,
+        "superweapon-registry-view" | "sound-source-hash" | "eva-source-hash" | "eva-find"
+    ) {
+        return None;
+    }
+    assert_eq!((section, key), ("", ""));
+    Some(match reader {
+        "superweapon-registry-view" => {
+            serde_json::to_vec(&vera_mod_api::SuperWeaponRegistryView::default())
+                .map_err(|e| e.to_string())
+        }
+        "sound-source-hash" | "eva-source-hash" => {
+            assert_eq!(current, b"null");
+            Ok(b"0".to_vec())
+        }
+        "eva-find" => serde_json::from_slice::<String>(current)
+            .map(|_| b"null".to_vec())
+            .map_err(|e| e.to_string()),
+        _ => unreachable!(),
+    })
+}
+
 #[test]
 fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
     let query = |config, context| {
@@ -431,8 +462,13 @@ impl Host for SlotConfigHost {
         section: &str,
         key: &str,
         reader: &str,
-        _: &[u8],
+        current: &[u8],
     ) -> Result<Vec<u8>, String> {
+        if let Some(reply) =
+            crate::component::tests::empty_super_sources(section, key, reader, current)
+        {
+            return reply;
+        }
         match (section, key, reader) {
             ("VeraFeatures", "AresNoAmmoWeapon", "bool") => Ok(b"true".to_vec()),
             ("TANK", "NoAmmoWeapon", "ares-int") => {
@@ -542,8 +578,13 @@ impl Host for SurvivalConfigHost {
         section: &str,
         key: &str,
         reader: &str,
-        _: &[u8],
+        current: &[u8],
     ) -> Result<Vec<u8>, String> {
+        if let Some(reply) =
+            crate::component::tests::empty_super_sources(section, key, reader, current)
+        {
+            return reply;
+        }
         match (section, key, reader) {
             ("VeraFeatures", "AresKeepAlive", "bool") if self.disabled => Ok(b"false".to_vec()),
             ("EXCLUDED", "KeepAlive", "ares-nullable-bool") => Ok(b"false".to_vec()),
@@ -587,6 +628,154 @@ pub(super) fn frozen_query(config: &[u8], context: Context) -> Plan {
     let plan = evaluate(&request, &FrozenHost).unwrap();
     plan.validate_for(&request).unwrap();
     plan
+}
+
+/// Predecoded source facts, not an INI parser. The physical owner deliberately
+/// differs from its stored ID so guest reads cannot silently substitute it.
+struct SuperSourceHost {
+    body: bool,
+}
+impl Host for SuperSourceHost {
+    fn config(&self, section: &str, key: &str) -> Option<String> {
+        (self.body && (section, key) == ("ACTUAL", "Type")).then(|| "decoded Type".into())
+    }
+    fn config_read(
+        &self,
+        section: &str,
+        key: &str,
+        reader: &str,
+        current: &[u8],
+    ) -> Result<Vec<u8>, String> {
+        use vera_mod_api::{
+            SuperReadValue, SuperWeaponReadPoint, SuperWeaponReadSite, SuperWeaponRegistryView,
+        };
+        if reader == "superweapon-registry-view" {
+            assert_eq!((section, key), ("", ""));
+            return serde_json::to_vec(&SuperWeaponRegistryView {
+                superweapons: vec!["STRIKE".into()],
+                reads: vec![SuperWeaponReadPoint {
+                    site: SuperWeaponReadSite::Type {
+                        ordinal: 0,
+                        section: self.body.then(|| "ACTUAL".into()),
+                    },
+                }],
+            })
+            .map_err(|e| e.to_string());
+        }
+        if let Some(reply) = empty_super_sources(section, key, reader, current) {
+            return reply;
+        }
+        assert!(self.body, "no INI read is allowed for an absent body");
+        assert_eq!(section, "ACTUAL");
+        match reader {
+            "name:40" => {
+                assert_eq!(key, "Type");
+                Ok(br#""GenericWarhead""#.to_vec())
+            }
+            "comma-mask:2048" => Ok(b"null".to_vec()),
+            _ => {
+                let input: SuperReadValue<serde_json::Value> =
+                    serde_json::from_slice(current).map_err(|e| e.to_string())?;
+                assert_eq!(input.read, 0);
+                match reader {
+                    "super-country-mask" | "super-building-list" => Ok(b"null".to_vec()),
+                    "super-effective:presence" => Ok(b"false".to_vec()),
+                    "super-animation-reference"
+                    | "super-eva-reference"
+                    | "super-effective:ares-int"
+                    | "super-effective:int"
+                    | "super-effective:bool" => {
+                        serde_json::to_vec(&input.current).map_err(|e| e.to_string())
+                    }
+                    _ => Err(format!("unexpected Super fixture reader {reader}")),
+                }
+            }
+        }
+    }
+    fn registry(&self, _: &str) -> Vec<String> {
+        panic!("no extra registry lookup")
+    }
+    fn damage_kernel(&self, _: &DamageKernelInput) -> Result<i32, String> {
+        panic!("configuration cannot inflict damage")
+    }
+}
+
+#[test]
+fn superweapon_configuration_consumes_absent_first_visit_and_queries_frozen_sources() {
+    use vera_mod_api::{
+        ConfigureSuperReadContext, SuperReferenceRead, SuperWeaponPayloadPolicy,
+        SuperWeaponResourceContext,
+    };
+    let visit = |config: Vec<u8>, body: bool| {
+        let request = Request {
+            api_version: API_VERSION,
+            context: Context::ConfigureSuperRead(ConfigureSuperReadContext {
+                read: 0,
+                ordinal: 0,
+                stored_id: "STRIKE".into(),
+                body_read: body,
+                effective_type: body.then(|| "GenericWarhead".into()),
+            }),
+            config,
+            state: vec![],
+        };
+        let plan = evaluate(&request, &SuperSourceHost { body }).unwrap();
+        plan.validate_for(&request).unwrap();
+        assert_eq!(
+            plan.super_reference_read,
+            Some(if body {
+                SuperReferenceRead::WarheadFromCurrentSection
+            } else {
+                SuperReferenceRead::Retain
+            })
+        );
+        plan.config.unwrap()
+    };
+    let after_absent = visit(visit(vec![], false), true);
+    let first_generic = visit(vec![], true);
+    let context = || Context::SuperWeaponResource(SuperWeaponResourceContext {});
+    let absent = frozen_query(&after_absent, context())
+        .superweapon_resource
+        .unwrap();
+    let generic = frozen_query(&first_generic, context())
+        .superweapon_resource
+        .unwrap();
+    assert_eq!(
+        (generic.sound_source_hash, generic.eva_source_hash),
+        (Some(0), Some(0))
+    );
+    assert_eq!(
+        generic.definitions[0].insufficient_funds_eva,
+        vera_mod_api::NullableResourceName::Clear
+    );
+    let SuperWeaponPayloadPolicy::GenericWarhead {
+        targeting: absent, ..
+    } = &absent.definitions[0].payload
+    else {
+        panic!("retained GenericWarhead dispatch");
+    };
+    let SuperWeaponPayloadPolicy::GenericWarhead {
+        targeting: generic, ..
+    } = &generic.definitions[0].payload
+    else {
+        panic!("initial GenericWarhead dispatch");
+    };
+    assert!(!absent.offensive_ai);
+    assert!(generic.offensive_ai);
+    assert_eq!((absent.automatic_target, absent.automatic_house), (0, 0));
+    assert_eq!(
+        (generic.automatic_target, generic.automatic_house),
+        (0x38, 4)
+    );
+    let mut historical = serde_json::to_value(Configuration::default()).unwrap();
+    historical.as_object_mut().unwrap().remove("superweapons");
+    assert!(
+        frozen_query(&serde_json::to_vec(&historical).unwrap(), context())
+            .superweapon_resource
+            .is_none()
+    );
+    let fresh = frozen_query(&[], context()).superweapon_resource.unwrap();
+    assert!(fresh.definitions.is_empty() && fresh.providers.is_empty());
 }
 
 #[test]
@@ -677,6 +866,11 @@ impl Host for CompositeConfigHost {
         reader: &str,
         current: &[u8],
     ) -> Result<Vec<u8>, String> {
+        if let Some(reply) =
+            crate::component::tests::empty_super_sources(section, key, reader, current)
+        {
+            return reply;
+        }
         if reader == "faction-registry-view" {
             // This domain fixture has no Side/Country reader dispatch.
             assert_eq!((section, key, current), ("", "", b"null".as_slice()));
@@ -970,6 +1164,11 @@ impl Host for ArmorConfigHost {
         reader: &str,
         current: &[u8],
     ) -> Result<Vec<u8>, String> {
+        if let Some(reply) =
+            crate::component::tests::empty_super_sources(section, key, reader, current)
+        {
+            return reply;
+        }
         if reader == "faction-registry-view" {
             // This domain fixture has no Side/Country reader dispatch.
             assert_eq!((section, key, current), ("", "", b"null".as_slice()));

@@ -25,7 +25,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development source is 0.27.0, configuration version 17 and entity state
+Current development source is 0.28.0, configuration version 18 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
@@ -46,6 +46,23 @@ presentation plus optional `loading_theme_resource`. Version 0.18 connects sideb
 EVA SetSide, message colors, GraphicalText and score consumption through the same
 frozen declarations and original presentation owners. Actual-component, legacy and real-retail
 loading checks passed for the bounded Country presentation chain; see the [Chinese guide](../../sdk/dev-kit/README.zh-CN.md#阵营共享配置与玩法).
+
+Version 0.28 moves the existing SuperWeapon extensions into
+`features/superweapons/`. `configure_super_read` runs at the original Rules
+visit, preserving first-visit initialization and SW.Warhead reference allocation;
+`superweapon_resource` publishes one immutable batch for providers, availability,
+initial/virtual charge, payments, GenericWarhead, UnitDelivery and presentation.
+Authors use the existing Ares INI keys without an extra enable tag. Shared Host
+readers and fixed audio catalogs remain authoritative; the original engine owns
+charge/history, money, two-stage selection and delivery queues, without per-frame
+Wasm mutations.
+
+This candidate uses config18/state1 and the same API v1/WIT name, with a matching
+newer host required for the new hooks. Absent declarations preserve the host
+profile; an explicit default policy selects stock behavior. Restore uses the
+exact saved component and frozen configuration; preserve old host/component
+pairs for old saves. Scope remains the previously implemented subset, excluding
+full charge-drain, additional payload kinds and additional AI targeting modes.
 
 Version 0.27 adds the pure `sound_sample_admission` declaration before the
 fixed SOUNDMD catalog is first read. The reference selects unindexed sample
@@ -163,16 +180,21 @@ Code is grouped by domain and complete mechanism:
 
 ```text
 src/features/
-├─ defense/shield/           # configuration, state, damage and recovery
-├─ units/manual_control.rs  # NoManualFire/Unload/Enter, NoSelfGuardArea
-└─ weapons/
-   ├─ ammo_cost.rs           # weapon Ammo cost
-   ├─ reload.rs              # ReloadAmount / EmptyReloadAmount
-   └─ empty_weapon.rs        # NoAmmoWeapon / NoAmmoAmount
+├─ defense/                 # shield, overload and armor
+├─ units/                   # manual controls, effects, EMP, lights and conversion
+├─ weapons/                 # ammo cost, reload and low-ammo weapon choice
+├─ production/              # eligibility, factories and country plans
+├─ buildings/               # custom foundations
+├─ houses/                  # survival policy
+├─ factions/                # Side/Country gameplay and presentation
+├─ resources/               # startup resources and loading themes
+├─ presentation/            # cameos and promotion sounds
+└─ superweapons/            # read history, targeting and frozen declarations
 ```
 
 Every feature uses the same `src/support/host.rs` facade and configuration
-readers. Shared static query/policy types live in `sdk/api/src/resource.rs`;
+readers. Shared query/policy types live in `sdk/api/src/`, including
+`resource.rs` and `superweapon.rs`;
 `type_resource` adds no Host service or WIT import.
 
 New matches with this component enable AresManualControl by default; the four

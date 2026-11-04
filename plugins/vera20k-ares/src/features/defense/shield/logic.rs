@@ -229,6 +229,7 @@ pub(crate) fn evaluate<H: Host>(
         Context::Configure(_)
         | Context::ConfigureBoundary(_)
         | Context::ConfigureCountryRead
+        | Context::ConfigureSuperRead(_)
         | Context::ConfigureFactionPass => {
             return Err("configuration must use the configuration hook".into());
         }
@@ -241,6 +242,7 @@ pub(crate) fn evaluate<H: Host>(
         | Context::FoundationResource(_)
         | Context::CameoResource(_)
         | Context::TypeSoundResource(_)
+        | Context::SuperWeaponResource(_)
         | Context::StartupResources(_)
         | Context::EvaCatalog
         | Context::LongListReaders
