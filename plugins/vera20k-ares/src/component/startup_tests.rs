@@ -103,6 +103,7 @@ fn startup_capabilities_are_pure_installation_declarations_without_feature_confi
         Context::EvaCatalog,
         Context::SpawnIdentity,
         Context::PrismSupportDefaults,
+        Context::SoundSampleAdmission,
     ] {
         let request = Request {
             api_version: API_VERSION,
@@ -133,13 +134,14 @@ fn startup_capabilities_are_pure_installation_declarations_without_feature_confi
                 }),
             ),
             Context::PrismSupportDefaults => assert_eq!(plan.prism_support_defaults, Some(true)),
+            Context::SoundSampleAdmission => assert_eq!(plan.sound_sample_admission, Some(true)),
             _ => unreachable!(),
         }
         assert!(plan.config.is_none() && plan.state.is_empty());
         assert!(manifest().hooks.contains(&request.context.kind()));
     }
     let manifest = manifest();
-    assert_eq!(manifest.version, "0.26.0");
+    assert_eq!(manifest.version, "0.27.0");
     assert_eq!(
         (
             manifest.api_version,

@@ -124,6 +124,7 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
     assert!(historical.get("anim_damage").is_none());
     assert!(historical.get("airburst_tail").is_none());
     assert!(historical.get("warhead_house_filter").is_none());
+    assert!(historical.get("sound_sample_admission").is_none());
     let request = Request {
         api_version: API_VERSION,
         context: Context::MatchRules(vera_mod_api::MatchRulesContext {}),

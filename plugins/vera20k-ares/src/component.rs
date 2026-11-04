@@ -133,7 +133,7 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.26.0".into(),
+        version: "0.27.0".into(),
         state_version: 1,
         config_version: 17,
         hooks: vec![
@@ -156,6 +156,7 @@ pub fn manifest() -> ModuleManifest {
             HookKind::LongListReaders,
             HookKind::SpawnIdentity,
             HookKind::PrismSupportDefaults,
+            HookKind::SoundSampleAdmission,
             HookKind::ConfigureCountryRead,
             HookKind::FactionResource,
             HookKind::ConfigureFactionPass,
@@ -179,6 +180,13 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
 
 pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, String> {
     request.validate()?;
+    if let Context::SoundSampleAdmission = &request.context {
+        // Fixed SOUNDMD sample admission is selected before configuration.
+        // The host keeps the actual source identity and sample catalog.
+        let mut plan = Plan::unchanged(request);
+        plan.sound_sample_admission = Some(true);
+        return Ok(plan);
+    }
     if let Context::PrismSupportDefaults = &request.context {
         // Select the installed Prism reader default before Rules loading;
         // this declaration does not consume match configuration or Host data.
@@ -356,6 +364,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         | Context::LongListReaders
         | Context::SpawnIdentity
         | Context::PrismSupportDefaults
+        | Context::SoundSampleAdmission
         | Context::ConfigureCountryRead
         | Context::ConfigureFactionPass => {
             unreachable!("handled before feature validation")

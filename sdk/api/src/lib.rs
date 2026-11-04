@@ -123,6 +123,7 @@ pub enum HookKind {
     TypeSoundResource,
     SpawnIdentity,
     PrismSupportDefaults,
+    SoundSampleAdmission,
 }
 
 impl HookKind {
@@ -153,6 +154,7 @@ impl HookKind {
             Self::TypeSoundResource => "type_sound_resource",
             Self::SpawnIdentity => "spawn_identity",
             Self::PrismSupportDefaults => "prism_support_defaults",
+            Self::SoundSampleAdmission => "sound_sample_admission",
         }
     }
 }
@@ -275,6 +277,9 @@ pub enum Context {
     /// Choose the existing Prism ReadDouble default units before cold Rules.
     /// This pure declaration has no gameplay configuration or entity state.
     PrismSupportDefaults,
+    /// Choose sample admission before the fixed SOUNDMD catalog is read.
+    /// This pure declaration cannot read gameplay configuration or state.
+    SoundSampleAdmission,
 }
 
 impl Context {
@@ -305,6 +310,7 @@ impl Context {
             Self::TypeSoundResource(_) => HookKind::TypeSoundResource,
             Self::SpawnIdentity => HookKind::SpawnIdentity,
             Self::PrismSupportDefaults => HookKind::PrismSupportDefaults,
+            Self::SoundSampleAdmission => HookKind::SoundSampleAdmission,
         }
     }
 }
@@ -376,6 +382,11 @@ pub struct Plan {
     /// false selects retail units, and absence preserves the host profile.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub prism_support_defaults: Option<bool>,
+    /// true permits lexical sample names outside the process audio index;
+    /// false requires indexed names when an index exists. None keeps the host
+    /// profile. The original decoder remains responsible for loading samples.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sound_sample_admission: Option<bool>,
 }
 
 impl Plan {
@@ -406,6 +417,7 @@ impl Plan {
             type_sound_resource: None,
             spawn_identity: None,
             prism_support_defaults: None,
+            sound_sample_admission: None,
         }
     }
 }
@@ -490,6 +502,7 @@ impl Request {
                 | HookKind::LongListReaders
                 | HookKind::SpawnIdentity
                 | HookKind::PrismSupportDefaults
+                | HookKind::SoundSampleAdmission
         ) && (!self.config.is_empty() || !self.state.is_empty())
         {
             return Err("startup recipes cannot consume gameplay configuration or state".into());
@@ -558,7 +571,8 @@ impl Request {
             | Context::CameoResource(_)
             | Context::TypeSoundResource(_)
             | Context::SpawnIdentity
-            | Context::PrismSupportDefaults => None,
+            | Context::PrismSupportDefaults
+            | Context::SoundSampleAdmission => None,
         }
     }
 }
@@ -645,6 +659,7 @@ impl Plan {
                 | HookKind::TypeSoundResource
                 | HookKind::SpawnIdentity
                 | HookKind::PrismSupportDefaults
+                | HookKind::SoundSampleAdmission
         ) && (!self.state.is_empty()
             || self.projection.is_some()
             || !self.operations.is_empty()
@@ -728,6 +743,11 @@ impl Plan {
             && !matches!(request.context, Context::PrismSupportDefaults)
         {
             return Err("only prism_support_defaults may select the Prism reader default".into());
+        }
+        if self.sound_sample_admission.is_some()
+            && !matches!(request.context, Context::SoundSampleAdmission)
+        {
+            return Err("only sound_sample_admission may select fixed sample admission".into());
         }
         if let Some(plan) = &self.effects {
             let Context::Effects(context) = &request.context else {
@@ -846,6 +866,20 @@ mod tests {
         plan.validate_for(&request).unwrap();
         let mut wrong = request.clone();
         wrong.context = Context::SpawnIdentity;
+        assert!(plan.validate_for(&wrong).is_err());
+        plan.state.push(1);
+        assert!(plan.validate_for(&request).is_err());
+        request.config.push(1);
+        assert!(request.validate().is_err());
+
+        request.context = Context::SoundSampleAdmission;
+        request.config.clear();
+        request.validate().unwrap();
+        plan = Plan::unchanged(&request);
+        plan.sound_sample_admission = Some(false);
+        plan.validate_for(&request).unwrap();
+        let mut wrong = request.clone();
+        wrong.context = Context::EvaCatalog;
         assert!(plan.validate_for(&wrong).is_err());
         plan.state.push(1);
         assert!(plan.validate_for(&request).is_err());

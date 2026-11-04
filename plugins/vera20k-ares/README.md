@@ -25,7 +25,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development source is 0.26.0, configuration version 17 and entity state
+Current development source is 0.27.0, configuration version 17 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
@@ -46,6 +46,16 @@ presentation plus optional `loading_theme_resource`. Version 0.18 connects sideb
 EVA SetSide, message colors, GraphicalText and score consumption through the same
 frozen declarations and original presentation owners. Actual-component, legacy and real-retail
 loading checks passed for the bounded Country presentation chain; see the [Chinese guide](../../sdk/dev-kit/README.zh-CN.md#阵营共享配置与玩法).
+
+Version 0.27 adds the pure `sound_sample_admission` declaration before the
+fixed SOUNDMD catalog is first read. The reference selects unindexed sample
+admission without an INI switch; absence keeps the host profile, while explicit
+false requires indexed names when an index exists. The original catalog, sample
+selection and WAV decoder remain host-owned. Reacquiring assets retains the same
+frozen catalog. An equal raw INI hash does not prove equal admission semantics;
+exact component identity and the fixed source recipe remain authoritative.
+Config17/state1/API v1/WIT are unchanged; the new declaration requires a matching
+host. Audio-device output and cross-platform execution were not tested.
 
 Version 0.26 binds the ordinary Warhead House filter and existing Airburst
 boundary through `match_rules.warhead_house_filter` and `airburst_tail`.
