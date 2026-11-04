@@ -41,6 +41,24 @@ pub struct MatchRulesPolicy {
     /// None preserves the host profile; explicit false values select retail.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub anim_damage: Option<AnimDamagePolicy>,
+    /// Selects the existing ordinary damage House gate independently of EMP.
+    /// Retained Warhead relationship fields and the damage receiver stay shared.
+    /// True requires effective relationship bindings for every retained Warhead;
+    /// a host without those bindings rejects the component configuration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub warhead_house_filter: Option<bool>,
+    /// Selects the existing Bullet detonation tail. None keeps the host profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub airburst_tail: Option<AirburstTailPolicy>,
+}
+
+/// The replacement fan is deliberately unavailable until its complete geometry
+/// and random draws are implemented. This does not claim Ares Airburst support.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AirburstTailPolicy {
+    RetailFixedNine,
+    UnsupportedReplacement,
 }
 
 /// Selects existing Anim damage inputs. Accumulation, timers, attachments,
@@ -102,11 +120,15 @@ mod tests {
         assert_eq!(policy.registered_side_ui, None);
         assert_eq!(policy.building_presentation, None);
         assert_eq!(policy.anim_damage, None);
+        assert_eq!(policy.warhead_house_filter, None);
+        assert_eq!(policy.airburst_tail, None);
         assert_eq!(serde_json::to_string(&policy).unwrap(), old);
         policy.script_type_conversion = Some(false);
         policy.registered_side_ui = Some(false);
         policy.building_presentation = Some(BuildingPresentationPolicy::default());
         policy.anim_damage = Some(AnimDamagePolicy::default());
+        policy.warhead_house_filter = Some(false);
+        policy.airburst_tail = Some(AirburstTailPolicy::RetailFixedNine);
         let bytes = serde_json::to_vec(&policy).unwrap();
         assert_eq!(
             serde_json::from_slice::<MatchRulesPolicy>(&bytes).unwrap(),

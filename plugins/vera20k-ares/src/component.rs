@@ -133,7 +133,7 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.25.0".into(),
+        version: "0.26.0".into(),
         state_version: 1,
         config_version: 17,
         hooks: vec![
@@ -452,6 +452,12 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                     use_source_house: true,
                     prefer_art_warhead: true,
                 }),
+                // Ordinary damage shares the frozen WH relationship fields;
+                // disabling the EMP status mechanism does not disable this gate.
+                warhead_house_filter: Some(true),
+                // The replacement fan remains explicitly unsupported rather
+                // than selecting the retail nine-child tail for this profile.
+                airburst_tail: Some(vera_mod_api::AirburstTailPolicy::UnsupportedReplacement),
             });
             Ok(plan)
         }

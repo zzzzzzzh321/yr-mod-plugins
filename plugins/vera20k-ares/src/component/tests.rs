@@ -122,6 +122,8 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
     );
     assert!(historical.get("building_presentation").is_none());
     assert!(historical.get("anim_damage").is_none());
+    assert!(historical.get("airburst_tail").is_none());
+    assert!(historical.get("warhead_house_filter").is_none());
     let request = Request {
         api_version: API_VERSION,
         context: Context::MatchRules(vera_mod_api::MatchRulesContext {}),
@@ -145,6 +147,11 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
             prefer_art_warhead: true,
         })
     );
+    assert_eq!(
+        plan.match_rules.unwrap().airburst_tail,
+        Some(vera_mod_api::AirburstTailPolicy::UnsupportedReplacement)
+    );
+    assert_eq!(plan.match_rules.unwrap().warhead_house_filter, Some(true));
     assert!(plan.config.is_none() && plan.state.is_empty());
     let cameo_plan = query(
         request.config.clone(),
@@ -186,6 +193,11 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
         Some(vera_mod_api::EffectRuntimePolicy::default())
     );
     assert_eq!(old_match.script_type_conversion, Some(false));
+    assert_eq!(old_match.warhead_house_filter, Some(true));
+    assert_eq!(
+        old_match.airburst_tail,
+        Some(vera_mod_api::AirburstTailPolicy::UnsupportedReplacement)
+    );
     assert_eq!(
         query(bytes.clone(), foundation).foundation_resource,
         Some(vera_mod_api::FoundationResourcePolicy::Stock { selector: 0 })
@@ -204,6 +216,25 @@ fn new_match_defaults_do_not_reinterpret_historical_frozen_configuration() {
             ai_recover_mission: None,
             reactivation_requires_powered_center: false,
         })
+    );
+    // This ordinary WH uses no EMP duration. Its accumulated relationship
+    // fields still travel through the existing EMP resource catalog while off.
+    let mut emp_off = historical.clone();
+    let relation = vera_mod_api::EmpWarheadPolicy {
+        affects_enemies: false,
+        affects_owner: Some(true),
+        ..Default::default()
+    };
+    emp_off["emp"]["warheads"]["RELATION"] = serde_json::to_value(&relation).unwrap();
+    assert_eq!(
+        query(
+            serde_json::to_vec(&emp_off).unwrap(),
+            Context::EmpResource(vera_mod_api::EmpResourceContext::Warhead {
+                name: "RELATION".into(),
+            })
+        )
+        .emp_resource,
+        Some(vera_mod_api::EmpResourcePolicy::Warhead { policy: relation })
     );
     assert_eq!(
         query(

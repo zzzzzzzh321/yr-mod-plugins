@@ -53,8 +53,8 @@ pub use foundation::{
 };
 pub use loading::{LoadingThemePolicy, LoadingThemeResourceContext, MAX_LOADING_THEME_NAME};
 pub use match_rules::{
-    AnimDamagePolicy, BuildingPresentationPolicy, CloakRuntimePolicy, EffectRuntimePolicy,
-    MatchRulesContext, MatchRulesPolicy, SurvivalRule,
+    AirburstTailPolicy, AnimDamagePolicy, BuildingPresentationPolicy, CloakRuntimePolicy,
+    EffectRuntimePolicy, MatchRulesContext, MatchRulesPolicy, SurvivalRule,
 };
 pub use production::{
     BASE_PRODUCTION_GROUPS, ProductionBuildLimitRule, ProductionGroup, ProductionObjectKind,
