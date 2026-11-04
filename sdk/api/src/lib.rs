@@ -122,6 +122,7 @@ pub enum HookKind {
     CameoResource,
     TypeSoundResource,
     SpawnIdentity,
+    PrismSupportDefaults,
 }
 
 impl HookKind {
@@ -151,6 +152,7 @@ impl HookKind {
             Self::CameoResource => "cameo_resource",
             Self::TypeSoundResource => "type_sound_resource",
             Self::SpawnIdentity => "spawn_identity",
+            Self::PrismSupportDefaults => "prism_support_defaults",
         }
     }
 }
@@ -270,6 +272,9 @@ pub enum Context {
     CameoResource(CameoResourceContext),
     TypeSoundResource(TypeSoundResourceContext),
     SpawnIdentity,
+    /// Choose the existing Prism ReadDouble default units before cold Rules.
+    /// This pure declaration has no gameplay configuration or entity state.
+    PrismSupportDefaults,
 }
 
 impl Context {
@@ -299,6 +304,7 @@ impl Context {
             Self::CameoResource(_) => HookKind::CameoResource,
             Self::TypeSoundResource(_) => HookKind::TypeSoundResource,
             Self::SpawnIdentity => HookKind::SpawnIdentity,
+            Self::PrismSupportDefaults => HookKind::PrismSupportDefaults,
         }
     }
 }
@@ -366,6 +372,10 @@ pub struct Plan {
     pub type_sound_resource: Option<TypeSoundResourcePolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub spawn_identity: Option<SpawnIdentityPolicy>,
+    /// true normalizes the retained integer percentage before ReadDouble;
+    /// false selects retail units, and absence preserves the host profile.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prism_support_defaults: Option<bool>,
 }
 
 impl Plan {
@@ -395,6 +405,7 @@ impl Plan {
             cameo_resource: None,
             type_sound_resource: None,
             spawn_identity: None,
+            prism_support_defaults: None,
         }
     }
 }
@@ -478,6 +489,7 @@ impl Request {
                 | HookKind::EvaCatalog
                 | HookKind::LongListReaders
                 | HookKind::SpawnIdentity
+                | HookKind::PrismSupportDefaults
         ) && (!self.config.is_empty() || !self.state.is_empty())
         {
             return Err("startup recipes cannot consume gameplay configuration or state".into());
@@ -545,7 +557,8 @@ impl Request {
             | Context::LoadingThemeResource(_)
             | Context::CameoResource(_)
             | Context::TypeSoundResource(_)
-            | Context::SpawnIdentity => None,
+            | Context::SpawnIdentity
+            | Context::PrismSupportDefaults => None,
         }
     }
 }
@@ -631,6 +644,7 @@ impl Plan {
                 | HookKind::CameoResource
                 | HookKind::TypeSoundResource
                 | HookKind::SpawnIdentity
+                | HookKind::PrismSupportDefaults
         ) && (!self.state.is_empty()
             || self.projection.is_some()
             || !self.operations.is_empty()
@@ -709,6 +723,11 @@ impl Plan {
         }
         if self.spawn_identity.is_some() && !matches!(request.context, Context::SpawnIdentity) {
             return Err("only spawn_identity may select external identity admission".into());
+        }
+        if self.prism_support_defaults.is_some()
+            && !matches!(request.context, Context::PrismSupportDefaults)
+        {
+            return Err("only prism_support_defaults may select the Prism reader default".into());
         }
         if let Some(plan) = &self.effects {
             let Context::Effects(context) = &request.context else {
@@ -814,6 +833,21 @@ mod tests {
         wrong.context = Context::EvaCatalog;
         assert!(plan.validate_for(&wrong).is_err());
         plan.config = Some(vec![1]);
+        assert!(plan.validate_for(&request).is_err());
+        request.config.push(1);
+        assert!(request.validate().is_err());
+
+        // Prism is an earlier pure declaration, not another Country read.
+        request.context = Context::PrismSupportDefaults;
+        request.config.clear();
+        request.validate().unwrap();
+        plan = Plan::unchanged(&request);
+        plan.prism_support_defaults = Some(false);
+        plan.validate_for(&request).unwrap();
+        let mut wrong = request.clone();
+        wrong.context = Context::SpawnIdentity;
+        assert!(plan.validate_for(&wrong).is_err());
+        plan.state.push(1);
         assert!(plan.validate_for(&request).is_err());
         request.config.push(1);
         assert!(request.validate().is_err());

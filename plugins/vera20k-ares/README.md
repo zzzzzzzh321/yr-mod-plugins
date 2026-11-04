@@ -25,7 +25,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development source is 0.24.0, configuration version 17 and entity state
+Current development source is 0.25.0, configuration version 17 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
@@ -46,6 +46,17 @@ presentation plus optional `loading_theme_resource`. Version 0.18 connects sideb
 EVA SetSide, message colors, GraphicalText and score consumption through the same
 frozen declarations and original presentation owners. Actual-component, legacy and real-retail
 loading checks passed for the bounded Country presentation chain; see the [Chinese guide](../../sdk/dev-kit/README.zh-CN.md#阵营共享配置与玩法).
+
+Version 0.25 adds the pure `prism_support_defaults` declaration before the first
+Rules read. The reference component selects the existing default-unit correction
+without an INI switch; absence keeps the host profile and explicit false selects
+retail behavior. A present General section with an absent modifier key retains
+the intended percentage across layers. Numeric readers, support counts and firing
+remain with their existing owners. Actual-component layer/save/delayed-shot, legacy
+and retail loading checks passed. Config17/state1/API v1/WIT stay unchanged, but a
+matching host is required. The native rules save layout changed: retain old host
+and component pairs for old saves. This adds no PrismForwarding; no GUI or
+cross-platform run was performed.
 
 Version 0.24 adds the pure `spawn_identity` declaration for the existing
 CnCNet spawn.ini Country and campaign Side width gates. The component selects

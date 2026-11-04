@@ -78,11 +78,13 @@ dist/release-new/
 └── vera-mod.json
 ```
 
-声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.24.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
+声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.25.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
 
 如果设置了 `CARGO_TARGET_DIR`，原始 Wasm 的位置随之改变；打包命令中的输入路径也应使用该目标目录。源码修改和编译过程不会自动改变作品当前对局中的组件。
 
 ## SDK 与引擎版本
+
+0.25 新增纯启动声明 `prism_support_defaults`，在第一次 Rules 读取前选择既有的棱镜支援倍率默认单位修复。参考组件直接返回 true，无需 INI 开关；未声明沿用宿主模式，显式 false 选择原版。存在 `[General]` 但缺少倍率键时，后续读取保留正确的百分比；数值解析、支援计数及发射仍归原所有者。实际组件的分层读取、保存恢复、延迟发射、旧模式和真实资源加载检查通过。配置17／状态1／API v1／WIT不变，但需要配套宿主；原生规则存档布局已变化，旧存档保留对应旧引擎和组件。本次不新增 PrismForwarding，未进行窗口或跨平台实跑。
 
 0.24 新增独立的纯启动声明 `spawn_identity`，在正式资源接纳后批准 CnCNet `spawn.ini` 的国家编号及战役 Side 范围。参考组件直接声明扩展 Country 与 byte Side，不读取玩法配置或增加 INI 开关；未声明沿用宿主原模式，显式 false 可覆盖旧内置模式。输入先由唯一解析器读取一次，再于原 Ready 流程按固定组件策略批准；国家是否注册、地图、人数和颜色仍由现有所有者校验。战役 Side／CampaignID 仍是元数据，显式 Scenario 仍使用记录0。实际组件的人类／电脑国家、阵营和基地车、旧实现、资源重建及七种真实资源加载检查通过。社区测试覆盖帧解码和同一批准入口，未安装全局快照，也未实际启动窗口／联网；独立网络房间描述的国家范围仍由既有协议校验。配置版本仍为17、状态版本仍为1，API v1/WIT不变，仍需配套宿主。 接口见[启动声明](../api/src/startup.rs)，安装级选择直接在组件入口返回，不放入 Shield 或实体配置。
 
@@ -96,7 +98,7 @@ dist/release-new/
 
 0.19 的 `long_list_readers` 是独立的安装级纯声明，在任何冷 Rules 读取前执行。参考组件直接返回 `Extended2048`，仅扩展 House `Allies`、Techno `Prerequisite` 和 `PrerequisiteOverride`；不受 `AresProduction`／`AresFaction` 开关控制。其他组件可明确返回 `Retail128`，不声明则保留宿主原模式。General 六类前置保持128，物理 INI 行限制保持511字节；原解析器、注册表和外交模块继续负责实际结果。配置版本仍为15，状态版本仍为1；完整旧存档保留对应旧引擎与原组件。
 
-接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.24.0开发分支使用配置版本17、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，整体迁移尚未完成，也未替换保留交付。
+接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.25.0开发分支使用配置版本17、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，整体迁移尚未完成，也未替换保留交付。
 
 开发分支新增`match_rules`、`effect_resource`、`effects`、`armor_resource`、`production_resource`、`configure_boundary`和`emp_resource`可选能力，以及类型隐形许可等消息字段。宿主须提供物理Rules读取点的注册类型查询、效果实例事务、原数学/动画/隐形所有者和相应保存恢复接入；只认识原有回调的宿主无法运行这版组件。组件的护盾字节与宿主效果列表分别保存，效果列表只有一个所有者。宿主接收静态策略时建立派生缓存，每次效果更新只提交经校验的有序动作。护甲增量已通过关联回归及真实资源加载，整体迁移仍在进行。SDK快照的配套引擎来源提交见`sdk/source.json`。
 
