@@ -25,7 +25,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development candidate is 0.31.0, configuration version 21 and entity state
+Current development candidate is 0.32.0, configuration version 22 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
@@ -46,6 +46,22 @@ presentation plus optional `loading_theme_resource`. Version 0.18 connects sideb
 EVA SetSide, message colors, GraphicalText and score consumption through the same
 frozen declarations and original presentation owners. Actual-component, legacy and real-retail
 loading checks passed for the bounded Country presentation chain; see the [Chinese guide](../../sdk/dev-kit/README.zh-CN.md#阵营共享配置与玩法).
+
+Version 0.32 adds the independent `features/projectiles/ballistic_scatter.rs`
+domain. It composes optional `ballistic_scatter` with Airburst in the same
+`projectile_resource` response without coupling either domain's ownership.
+Fresh configuration and real reset boundaries own the new domain; nonempty old
+configuration omits it. Physical Rules passes read Min then Max from retained
+Projectile history through the host's canonical `ares-nullable-leptons` reader.
+Absent limits remain None; valid zero remains an explicit override. No guest
+parser, clamp, live registry query or per-frame Wasm call is introduced.
+
+The bounded host path is ordinary FireAt with Inaccurate and Arcing, including
+plain and FlakScatter-without-Inviso branches. The existing launch owner resolves
+unset global defaults and owns RNG and coordinates; Bullet::Fire's additional
+Inviso+FlakScatter placement scatter is outside these two keys. Config22/state1
+keeps API v1, WIT and Hook identities unchanged but needs the new policy field
+and nullable reader. Candidate acceptance follows the paired host checks.
 
 Version 0.31 adds `features/projectiles/airburst.rs` and the optional static
 `projectile_resource` hook. Completed physical Rules passes read AirburstSpread,

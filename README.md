@@ -50,7 +50,11 @@ cargo run --locked --release -p vera-mod-pack -- target/wasm32-unknown-unknown/r
 
 `sdk/api` 和 `sdk/wit` 是版本固定的开发依赖快照，记录在 [sdk/source.json](sdk/source.json)。接口的权威源码位于相邻引擎工程，升级 SDK 时从权威版本同步，保持双方接口匹配。日常插件编译只读取本地快照，不访问引擎目录。
 
-0.31 开发候选新增独立 `features/projectiles/airburst.rs` 与可选 `projectile_resource`，为宿主 Ares Airburst／Splits 替换尾部提供每种 Projectile 的冻结声明。物理 Rules 阶段按实际 Projectile 家族保留历史读取 `AirburstSpread`、`RetargetAccuracy`、`Splits`、`RetargetSelf` 和 `AroundTarget`；double 原始位模式由宿主原生读取器提供，插件不做浮点解析或范围修正。默认分别为 1.5、0、false、true；未指定 `AroundTarget` 时取最终 `Splits`。最终绑定不重读物理注册表，运行中不逐帧调用 Wasm。
+0.32 开发候选新增独立 `features/projectiles/ballistic_scatter.rs`，在同一 `projectile_resource` 返回中组合可选 `ballistic_scatter` 与已有 Airburst 声明。新对局和真实配置重建边界拥有该域；旧非空配置缺域时继续省略，不依赖 Ammo／Airburst 开关。物理 Rules 阶段通过 Projectile 专属保留历史，按 Min 后 Max 调用宿主 `ares-nullable-leptons`，读取 `BallisticScatter.Min/Max`；默认均未声明，有效0是显式覆盖，空值或非法输入保留原生读取结果。最终绑定与运行查询只使用冻结配置，不增加逐帧 Wasm 调用。
+
+本批范围是普通 FireAt 的 `Inaccurate=yes`＋`Arcing=yes` 弹道散布及其中的 plain／`FlakScatter` 且非 `Inviso` 分支。未声明上下界时由原发射所有者分别选择全局默认；`Inviso`＋`FlakScatter` 的额外 Bullet::Fire 放置散布不在两键覆盖范围。候选为 config22／state1／API v1，WIT 和 Hook 不变，但需提供新字段及可空 Leptons 读取器的配套宿主；数值解析、随机流和发射仍使用原宿主所有者，验收状态随后续配套检查更新。
+
+0.31 新增独立 `features/projectiles/airburst.rs` 与可选 `projectile_resource`，为宿主 Ares Airburst／Splits 替换尾部提供每种 Projectile 的冻结声明。物理 Rules 阶段按实际 Projectile 家族保留历史读取 `AirburstSpread`、`RetargetAccuracy`、`Splits`、`RetargetSelf` 和 `AroundTarget`；double 原始位模式由宿主原生读取器提供，插件不做浮点解析或范围修正。默认分别为 1.5、0、false、true；未指定 `AroundTarget` 时取最终 `Splits`。最终绑定不重读物理注册表，运行中不逐帧调用 Wasm。
 
 只有新对局与真实配置重建边界拥有新 airburst 域，并一次性选择 `ares_replacement`；旧非空配置保留既有 `unsupported_replacement` 行为与省略的新返回字段。新域要求同一配置拥有 range／firing 域和宿主已有的 Warhead 关系完整接纳，子弹航程、目标、随机流、构造、引爆和存读档仍由宿主原有所有者维护。候选为 config21／state1／API v1，WIT 不变，但需要支持新 Hook、字段及 Projectile 专属读取器的配套宿主。实际组件的普通扇面、Splits 过滤、随机顺序、共享 Dummy、子弹字段和冻结保存回归已经通过；完整 AR268 兼容及尚未覆盖的特殊入口仍见[兼容台账](compatibility/README.zh-CN.md)。
 
@@ -88,7 +92,7 @@ Ares 全量兼容以[逐项兼容台账](compatibility/README.zh-CN.md)持续跟
 
 `NoAmmoWeapon`按安装版Ares的有符号整数语义处理：任意负数关闭，非负索引原样发布；有效0..17槽复用宿主现有选择器和精英回退。`WeaponN`读取、炮手提前返回及>=18安全无武器的边界见[弹药机制说明](plugins/vera20k-ares/AMMO.zh-CN.md)。建筑动画延迟枪需使用保存完整索引的配套新版宿主。0.6.0不扩展SDK或配置/状态结构。
 
-内部组件标识仍为 `vera.reference-gameplay`。保留交付是组件 0.7.0、配置版本 5、状态版本 1；当前开发候选是 0.31.0、配置版本 21、状态版本 1，API v1 与 WIT 不变。开发分支已接入生产、护甲、附加效果、EMP、探照灯、类型转换、建筑占地、启动资源及阵营共享配置／玩法等既有子集，具体范围和配置见[独立开发指南](sdk/dev-kit/README.zh-CN.md)，Ares 完整文档兼容仍未完成。新默认只用于新对局；旧组件字节和已冻结配置保留原行为。读档要求当前作品提供与存档摘要相同的原组件，完整存档布局变化时也需保留相应旧引擎。本工程使用独立本地 Git 管理，未经授权不上传或公开。
+内部组件标识仍为 `vera.reference-gameplay`。保留交付是组件 0.7.0、配置版本 5、状态版本 1；当前开发候选是 0.32.0、配置版本 22、状态版本 1，API v1 与 WIT 不变。开发分支已接入生产、护甲、附加效果、EMP、探照灯、类型转换、建筑占地、启动资源及阵营共享配置／玩法等既有子集，具体范围和配置见[独立开发指南](sdk/dev-kit/README.zh-CN.md)，Ares 完整文档兼容仍未完成。新默认只用于新对局；旧组件字节和已冻结配置保留原行为。读档要求当前作品提供与存档摘要相同的原组件，完整存档布局变化时也需保留相应旧引擎。本工程使用独立本地 Git 管理，未经授权不上传或公开。
 
 0.17 接通国家菜单、旗帜、早晚加载画面与加载音乐，使用同一实时组件声明和原界面快照。场景全局清空保留尚存国家的父国继承历史，真正类型重建才清除；音乐仍由原播放模块负责。该链已通过实际组件、关联回归与旧实现对照，七种真实资源模式及上一版组件加载也已通过。0.18 接入侧栏、EVA SetSide、消息颜色、胜负文字及结算资源，仍使用原有界面、音频与资源所有者；保留交付不变。
 

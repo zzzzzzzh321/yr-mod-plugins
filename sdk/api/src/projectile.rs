@@ -13,6 +13,19 @@ pub struct ProjectileResourceContext {
 pub struct ProjectileResourcePolicy {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub airburst: Option<AirburstPolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ballistic_scatter: Option<BallisticScatterPolicy>,
+}
+
+/// Optional signed-lepton bounds for the existing FireAt launch scatter.
+/// Unset limits retain that caller's global defaults; zero is an override.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BallisticScatterPolicy {
+    #[serde(default)]
+    pub min: Option<i32>,
+    #[serde(default)]
+    pub max: Option<i32>,
 }
 
 /// Inputs for the existing host fan. Raw binary64 retains native exceptional
@@ -56,6 +69,7 @@ mod tests {
                 retarget_self: true,
                 around_target: false,
             }),
+            ..Default::default()
         });
         plan.validate_for(&request).unwrap();
         plan.state.push(1);

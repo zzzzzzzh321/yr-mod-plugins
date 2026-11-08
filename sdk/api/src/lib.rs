@@ -66,7 +66,9 @@ pub use production::{
     ProductionSemantics, ProductionTypeRef,
 };
 
-pub use projectile::{AirburstPolicy, ProjectileResourceContext, ProjectileResourcePolicy};
+pub use projectile::{
+    AirburstPolicy, BallisticScatterPolicy, ProjectileResourceContext, ProjectileResourcePolicy,
+};
 
 pub use resource::{
     DepletedWeaponPolicy, InputPolicy, ReloadPolicy, SpotlightAttachment, SpotlightPolicy,

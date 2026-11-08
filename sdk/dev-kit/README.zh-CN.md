@@ -80,13 +80,29 @@ dist/release-new/
 └── vera-mod.json
 ```
 
-声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.31.0开发候选还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
+声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.32.0开发候选还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
 
 如果设置了 `CARGO_TARGET_DIR`，原始 Wasm 的位置随之改变；打包命令中的输入路径也应使用该目标目录。源码修改和编译过程不会自动改变作品当前对局中的组件。
 
 ## SDK 与引擎版本
 
-0.31 开发候选新增 `features/projectiles/airburst.rs` 与静态 `projectile_resource`，向配套宿主提供 Ares Airburst／Splits 的每种 Projectile 配置。以下字段写在已有抛射体段，不在 Weapon 段；仍需作品本身具有可用的 `AirburstWeapon` 等定义：
+0.32 开发候选新增独立 `features/projectiles/ballistic_scatter.rs`，通过已有 `projectile_resource.ballistic_scatter` 提供每种抛射体的可空上下界，与 Airburst 共用一次资源返回。作者在已有 Projectile 段配置，外部单位仍为格，例如：
+
+```ini
+[MyProjectile]
+Inaccurate=yes
+Arcing=yes
+BallisticScatter.Min=0
+BallisticScatter.Max=1.5
+```
+
+Min／Max 的原生默认都是“未声明”，不在配置阶段改成0或半个全局值；有效0保留为 `Some(0)`。宿主在普通 FireAt 发射时按原分支解析缺省：plain 的 Min 取全局 BallisticScatter 的有符号除2，`FlakScatter` 且非 `Inviso` 分支的 Min 为0，两者 Max 均取全局值。此处只覆盖同时满足 `Inaccurate` 与 `Arcing` 的原分支，不改变 `Inviso`＋`FlakScatter` 在 Bullet::Fire 中的额外放置散布。
+
+每个完整物理 Rules 阶段经 `$projectile-config` 和 `retained_projectile_read("ares-nullable-leptons")` 按 Min 后 Max 请求宿主保留历史。首层非法保留 None，后层空值／非法保留此前原生结果；有符号值原样传递，不在 Wasm 中解析浮点数、截断、clamp 或制造 presence。默认声明不占稀疏配置项；最终绑定与运行查询只读冻结配置。新对局及真实 ScenarioClear／TypeReset 边界创建 scatter 域，非空旧配置缺域时保持省略。该域独立于 Ammo、Airburst、firing／range 的启用和历史存在状态；返回组合保留已有 Airburst 声明。
+
+候选为配置22／状态1／API v1，WIT 与 Hook 不变，但需要提供可选策略字段及新可空读取器的配套宿主。数值解析、发射散布、随机流及弹体生命周期仍归原宿主所有者，不新增逐帧 Wasm 调用；实际生产路径验收由配套引擎检查完成，当前说明不宣称新链已经通过验收。
+
+0.31 新增 `features/projectiles/airburst.rs` 与静态 `projectile_resource`，向配套宿主提供 Ares Airburst／Splits 的每种 Projectile 配置。以下字段写在已有抛射体段，不在 Weapon 段；仍需作品本身具有可用的 `AirburstWeapon` 等定义：
 
 ```ini
 [MyProjectile]
@@ -142,7 +158,7 @@ Ranged=yes
 
 0.19 的 `long_list_readers` 是独立的安装级纯声明，在任何冷 Rules 读取前执行。参考组件直接返回 `Extended2048`，仅扩展 House `Allies`、Techno `Prerequisite` 和 `PrerequisiteOverride`；不受 `AresProduction`／`AresFaction` 开关控制。其他组件可明确返回 `Retail128`，不声明则保留宿主原模式。General 六类前置保持128，物理 INI 行限制保持511字节；原解析器、注册表和外交模块继续负责实际结果。配置版本仍为15，状态版本仍为1；完整旧存档保留对应旧引擎与原组件。
 
-接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.31.0开发候选使用配置版本21、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，Ares 完整文档兼容尚未完成，也未替换保留交付。
+接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.32.0开发候选使用配置版本22、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，Ares 完整文档兼容尚未完成，也未替换保留交付。
 
 开发分支新增`match_rules`、`effect_resource`、`effects`、`armor_resource`、`production_resource`、`configure_boundary`和`emp_resource`可选能力，以及类型隐形许可等消息字段。宿主须提供物理Rules读取点的注册类型查询、效果实例事务、原数学/动画/隐形所有者和相应保存恢复接入；只认识原有回调的宿主无法运行这版组件。组件的护盾字节与宿主效果列表分别保存，效果列表只有一个所有者。宿主接收静态策略时建立派生缓存，每次效果更新只提交经校验的有序动作。护甲增量已通过关联回归及真实资源加载，Ares 完整文档兼容仍未完成。SDK快照的配套引擎来源提交见`sdk/source.json`。
 

@@ -32,6 +32,14 @@ impl Host for AirburstHost {
                 self.physical,
                 "final binding cannot reopen Projectile history"
             );
+            if reader == "projectile-effective:ares-nullable-leptons" {
+                assert!(matches!(
+                    key,
+                    "BallisticScatter.Min" | "BallisticScatter.Max"
+                ));
+                assert_eq!(current, b"null");
+                return Ok(current.to_vec());
+            }
             // Canonical results can retain arbitrary binary64 bits and a
             // nullable false. No INI parsing or numeric conversion is modeled.
             let value = match key {

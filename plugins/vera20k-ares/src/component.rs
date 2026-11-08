@@ -8,7 +8,7 @@ use crate::{
         houses::survival,
         presentation::{cameos, promotion_sounds},
         production,
-        projectiles::airburst,
+        projectiles::{airburst, ballistic_scatter},
         resources::{startup, loading_theme},
         superweapons,
         units::{attach_effect, cloak, emp, manual_control, spotlight, type_conversion},
@@ -141,6 +141,9 @@ pub(crate) struct Configuration {
     // Historical configuration keeps the earlier unsupported Airburst tail.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     airburst: Option<airburst::Configuration>,
+    // Scatter ownership is independent of Airburst and all weapon feature flags.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ballistic_scatter: Option<ballistic_scatter::Configuration>,
 }
 
 impl Configuration {
@@ -159,9 +162,9 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.31.0".into(),
+        version: "0.32.0".into(),
         state_version: 1,
-        config_version: 21,
+        config_version: 22,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -205,6 +208,7 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
             firing: Some(firing::Configuration::default()),
             projectile_range: Some(projectile_range::Configuration::default()),
             airburst: Some(airburst::Configuration::default()),
+            ballistic_scatter: Some(ballistic_scatter::Configuration::default()),
             ..Configuration::default()
         })
     } else {
@@ -353,6 +357,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             firing: Some(firing::Configuration::default()),
             projectile_range: Some(projectile_range::Configuration::default()),
             airburst: Some(airburst::Configuration::default()),
+            ballistic_scatter: Some(ballistic_scatter::Configuration::default()),
             ..Configuration::default()
         };
         let mut plan = Plan::unchanged(request);
@@ -393,6 +398,9 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             }
             if let Some(airburst) = config.airburst.as_mut() {
                 airburst.configure(host)?;
+            }
+            if let Some(scatter) = config.ballistic_scatter.as_mut() {
+                scatter.configure(host)?;
             }
         }
         if context.final_pass {
@@ -575,6 +583,11 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                 .airburst
                 .as_ref()
                 .map(|airburst| airburst.query(&context.projectile_name));
+            if let Some(scatter) = config.ballistic_scatter.as_ref() {
+                plan.projectile_resource
+                    .get_or_insert_with(Default::default)
+                    .ballistic_scatter = Some(scatter.query(&context.projectile_name));
+            }
             Ok(plan)
         }
         Context::WeaponFiringResource(context) => {
@@ -668,6 +681,8 @@ pub(crate) fn freeze_shield(shield: shield::Configuration, overload: bool) -> Ve
 
 #[cfg(test)]
 mod airburst_tests;
+#[cfg(test)]
+mod ballistic_scatter_tests;
 #[cfg(test)]
 mod cameo_tests;
 #[cfg(test)]

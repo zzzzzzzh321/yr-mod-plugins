@@ -76,6 +76,7 @@ impl Configuration {
                     .copied()
                     .unwrap_or(DEFAULT_POLICY),
             ),
+            ..Default::default()
         }
     }
 }
