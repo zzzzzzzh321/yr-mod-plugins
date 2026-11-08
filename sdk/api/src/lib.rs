@@ -13,6 +13,7 @@ mod loading;
 mod match_rules;
 pub mod native_string;
 mod production;
+mod projectile;
 pub mod relationship;
 mod resource;
 mod startup;
@@ -64,6 +65,8 @@ pub use production::{
     ProductionRequirement, ProductionResourceContext, ProductionResourcePolicy,
     ProductionSemantics, ProductionTypeRef,
 };
+
+pub use projectile::{AirburstPolicy, ProjectileResourceContext, ProjectileResourcePolicy};
 
 pub use resource::{
     DepletedWeaponPolicy, InputPolicy, ReloadPolicy, SpotlightAttachment, SpotlightPolicy,
@@ -138,6 +141,7 @@ pub enum HookKind {
     SuperWeaponResource,
     // New variants append: saved ModuleManifest values retain old ordinals.
     WeaponFiringResource,
+    ProjectileResource,
 }
 
 impl HookKind {
@@ -149,6 +153,7 @@ impl HookKind {
             Self::Tick => "tick",
             Self::WeaponResource => "weapon_resource",
             Self::WeaponFiringResource => "weapon_firing_resource",
+            Self::ProjectileResource => "projectile_resource",
             Self::TypeResource => "type_resource",
             Self::MatchRules => "match_rules",
             Self::EffectResource => "effect_resource",
@@ -300,6 +305,7 @@ pub enum Context {
     SoundSampleAdmission,
     /// One reached native SuperWeapon visit, before its reference allocation.
     ConfigureSuperRead(ConfigureSuperReadContext),
+    ProjectileResource(ProjectileResourceContext),
     WeaponFiringResource(WeaponFiringResourceContext),
 }
 
@@ -312,6 +318,7 @@ impl Context {
             Self::Tick(_) => HookKind::Tick,
             Self::WeaponResource(_) => HookKind::WeaponResource,
             Self::WeaponFiringResource(_) => HookKind::WeaponFiringResource,
+            Self::ProjectileResource(_) => HookKind::ProjectileResource,
             Self::TypeResource(_) => HookKind::TypeResource,
             Self::MatchRules(_) => HookKind::MatchRules,
             Self::EffectResource(_) => HookKind::EffectResource,
@@ -420,6 +427,8 @@ pub struct Plan {
     /// the current native read point, before committing the new configuration.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub super_reference_read: Option<SuperReferenceRead>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub projectile_resource: Option<ProjectileResourcePolicy>,
 }
 
 impl Plan {
@@ -454,6 +463,7 @@ impl Plan {
             prism_support_defaults: None,
             sound_sample_admission: None,
             super_reference_read: None,
+            projectile_resource: None,
         }
     }
 }
@@ -569,6 +579,7 @@ impl Request {
             Context::TypeSoundResource(_)
                 | Context::SuperWeaponResource(_)
                 | Context::WeaponFiringResource(_)
+                | Context::ProjectileResource(_)
         ) && !self.state.is_empty()
         {
             return Err("immutable resource queries have no entity state".into());
@@ -600,6 +611,7 @@ impl Request {
             Context::Tick(c) => Some(c.entity.id),
             Context::WeaponResource(_) => None,
             Context::WeaponFiringResource(_) => None,
+            Context::ProjectileResource(_) => None,
             Context::TypeResource(_) => None,
             Context::MatchRules(_) => None,
             Context::EffectResource(_) => None,
@@ -672,6 +684,11 @@ impl Plan {
             };
             policy.validate_for(context)?;
         }
+        if self.projectile_resource.is_some()
+            && request.context.kind() != HookKind::ProjectileResource
+        {
+            return Err("only projectile_resource may define projectile policies".into());
+        }
         if let Some(policy) = self.type_resource {
             let supported_users = WEAPON_USER_UNIT
                 | WEAPON_USER_INFANTRY
@@ -698,6 +715,7 @@ impl Plan {
             request.context.kind(),
             HookKind::WeaponResource
                 | HookKind::WeaponFiringResource
+                | HookKind::ProjectileResource
                 | HookKind::TypeResource
                 | HookKind::MatchRules
                 | HookKind::EffectResource

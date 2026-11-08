@@ -74,12 +74,34 @@ impl<'a, H: Host> ConfigView<'a, H> {
         reader: &str,
         current: T,
     ) -> Result<T, String> {
+        self.retained_body_read("weapon", owner, key, reader, current)
+    }
+    /// The same native reader service, scoped to the actual Projectile body.
+    /// Weapon history cannot supply values for a later same-ID Projectile.
+    pub fn retained_projectile_read<T: Serialize + DeserializeOwned>(
+        &self,
+        owner: &str,
+        key: &str,
+        reader: &str,
+        current: T,
+    ) -> Result<T, String> {
+        self.retained_body_read("projectile", owner, key, reader, current)
+    }
+    fn retained_body_read<T: Serialize + DeserializeOwned>(
+        &self,
+        family: &str,
+        owner: &str,
+        key: &str,
+        reader: &str,
+        current: T,
+    ) -> Result<T, String> {
         let input = serde_json::to_vec(&current).map_err(|e| e.to_string())?;
         let bytes = self
             .host
-            .config_read(owner, key, &format!("weapon-effective:{reader}"), &input)
-            .map_err(|e| format!("retained weapon [{owner}] {key}: {e}"))?;
-        serde_json::from_slice(&bytes).map_err(|e| format!("retained weapon reader {reader}: {e}"))
+            .config_read(owner, key, &format!("{family}-effective:{reader}"), &input)
+            .map_err(|e| format!("retained {family} [{owner}] {key}: {e}"))?;
+        serde_json::from_slice(&bytes)
+            .map_err(|e| format!("retained {family} reader {reader}: {e}"))
     }
     /// Shared physical read points and native identities, without interpreted
     /// gameplay fields. A missing/invalid view rejects configuration.

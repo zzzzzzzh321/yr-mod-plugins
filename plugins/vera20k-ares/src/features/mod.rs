@@ -6,6 +6,7 @@ pub(crate) mod factions;
 pub(crate) mod houses;
 pub(crate) mod presentation;
 pub(crate) mod production;
+pub(crate) mod projectiles;
 pub(crate) mod resources;
 pub(crate) mod superweapons;
 pub(crate) mod units;

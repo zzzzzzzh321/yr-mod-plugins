@@ -8,6 +8,7 @@ use crate::{
         houses::survival,
         presentation::{cameos, promotion_sounds},
         production,
+        projectiles::airburst,
         resources::{startup, loading_theme},
         superweapons,
         units::{attach_effect, cloak, emp, manual_control, spotlight, type_conversion},
@@ -137,12 +138,18 @@ pub(crate) struct Configuration {
     // Range ownership is separate from the older firing configuration cohort.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     projectile_range: Option<projectile_range::Configuration>,
+    // Historical configuration keeps the earlier unsupported Airburst tail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    airburst: Option<airburst::Configuration>,
 }
 
 impl Configuration {
     fn validate_resource_domains(&self) -> Result<(), String> {
         if self.projectile_range.is_some() && self.firing.is_none() {
             return Err("projectile range configuration requires the firing domain".into());
+        }
+        if self.airburst.is_some() && self.projectile_range.is_none() {
+            return Err("airburst configuration requires the projectile range domain".into());
         }
         Ok(())
     }
@@ -152,9 +159,9 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.30.0".into(),
+        version: "0.31.0".into(),
         state_version: 1,
-        config_version: 20,
+        config_version: 21,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -185,6 +192,7 @@ pub fn manifest() -> ModuleManifest {
             HookKind::LoadingThemeResource,
             HookKind::CameoResource,
             HookKind::TypeSoundResource,
+            HookKind::ProjectileResource,
         ],
     }
 }
@@ -196,6 +204,7 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
             superweapons: Some(superweapons::Configuration::default()),
             firing: Some(firing::Configuration::default()),
             projectile_range: Some(projectile_range::Configuration::default()),
+            airburst: Some(airburst::Configuration::default()),
             ..Configuration::default()
         })
     } else {
@@ -343,6 +352,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             superweapons: Some(superweapons::Configuration::default()),
             firing: Some(firing::Configuration::default()),
             projectile_range: Some(projectile_range::Configuration::default()),
+            airburst: Some(airburst::Configuration::default()),
             ..Configuration::default()
         };
         let mut plan = Plan::unchanged(request);
@@ -380,6 +390,9 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             }
             if let Some(range) = config.projectile_range.as_mut() {
                 range.configure(host)?;
+            }
+            if let Some(airburst) = config.airburst.as_mut() {
+                airburst.configure(host)?;
             }
         }
         if context.final_pass {
@@ -527,9 +540,12 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                 // Ordinary damage shares the frozen WH relationship fields;
                 // disabling the EMP status mechanism does not disable this gate.
                 warhead_house_filter: Some(true),
-                // The replacement fan remains explicitly unsupported rather
-                // than selecting the retail nine-child tail for this profile.
-                airburst_tail: Some(vera_mod_api::AirburstTailPolicy::UnsupportedReplacement),
+                // An old frozen cohort keeps its original unsupported tail.
+                airburst_tail: Some(if config.airburst.is_some() {
+                    vera_mod_api::AirburstTailPolicy::AresReplacement
+                } else {
+                    vera_mod_api::AirburstTailPolicy::UnsupportedReplacement
+                }),
                 projectile_fuel: config.projectile_range.as_ref().map(|_| true),
             });
             Ok(plan)
@@ -550,6 +566,15 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             } else {
                 vera_mod_api::EffectPlan::unchanged(context)
             });
+            Ok(plan)
+        }
+        Context::ProjectileResource(context) => {
+            let mut plan = Plan::unchanged(request);
+            plan.state.clear();
+            plan.projectile_resource = config
+                .airburst
+                .as_ref()
+                .map(|airburst| airburst.query(&context.projectile_name));
             Ok(plan)
         }
         Context::WeaponFiringResource(context) => {
@@ -641,6 +666,8 @@ pub(crate) fn freeze_shield(shield: shield::Configuration, overload: bool) -> Ve
     .unwrap()
 }
 
+#[cfg(test)]
+mod airburst_tests;
 #[cfg(test)]
 mod cameo_tests;
 #[cfg(test)]

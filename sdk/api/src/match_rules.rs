@@ -63,6 +63,8 @@ pub struct MatchRulesPolicy {
 pub enum AirburstTailPolicy {
     RetailFixedNine,
     UnsupportedReplacement,
+    /// Host fan with per-Projectile resource policies; older values keep ordinals.
+    AresReplacement,
 }
 
 /// Selects existing Anim damage inputs. Accumulation, timers, attachments,

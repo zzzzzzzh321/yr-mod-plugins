@@ -25,7 +25,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development candidate is 0.30.0, configuration version 20 and entity state
+Current development candidate is 0.31.0, configuration version 21 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
@@ -47,6 +47,24 @@ EVA SetSide, message colors, GraphicalText and score consumption through the sam
 frozen declarations and original presentation owners. Actual-component, legacy and real-retail
 loading checks passed for the bounded Country presentation chain; see the [Chinese guide](../../sdk/dev-kit/README.zh-CN.md#阵营共享配置与玩法).
 
+Version 0.31 adds `features/projectiles/airburst.rs` and the optional static
+`projectile_resource` hook. Completed physical Rules passes read AirburstSpread,
+RetargetAccuracy, Splits, RetargetSelf and nullable AroundTarget from the actual
+Projectile body history. Host double readers supply raw binary64 bits without
+guest parsing or clamping. Constructor defaults are spread 1.5, accuracy 0,
+Splits false and RetargetSelf true; absent AroundTarget resolves to final Splits.
+Final binding retains these declarations without opening a physical registry.
+
+Fresh configuration and real reset boundaries own the new airburst domain and
+select `ares_replacement`; nonempty old configuration keeps the earlier
+`unsupported_replacement` tail and omits the new resource response. The domain
+requires range/firing ownership for child budgets. Targets, RNG, constructors,
+flight, detonation and persistence remain with the existing host owners, with no
+per-frame Wasm call. Config21/state1 keeps API v1 and WIT unchanged but needs the
+new hook and scoped reader services. This candidate does not claim complete AR268
+compatibility or acceptance of every exceptional value and explosion entrypoint;
+the paired host checks determine the supported production scope.
+
 Version 0.30 adds the independent `features/weapons/projectile_range.rs` domain.
 It composes optional `projectile_range` into `weapon_firing_resource` and selects
 the host's travel-budget runtime once through `match_rules.projectile_fuel`.
@@ -57,7 +75,7 @@ history and canonical host `ares-leptons` reader; final binding only freezes the
 result. The constructor default is exactly 100000 leptons (390.625 cells), and
 signed host results are retained without a positive clamp.
 
-This increment covers ordinary FireAt's initial weapon budget and shared flight
+That increment covers ordinary FireAt's initial weapon budget and shared flight
 and exhaustion detonation for `Ranged=yes`. Bare/shrapnel constructors keep an
 INT_MAX initial budget; other special creators and the replacement Airburst fan
 are not claimed complete. The host owns the live counter, motion, detonation,
