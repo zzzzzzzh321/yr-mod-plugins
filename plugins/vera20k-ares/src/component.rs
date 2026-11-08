@@ -233,7 +233,7 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.33.0".into(),
+        version: "0.34.0".into(),
         state_version: 1,
         config_version: 23,
         hooks: vec![

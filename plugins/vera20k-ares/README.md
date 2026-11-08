@@ -15,7 +15,7 @@ This plugin is maintained in the independent `plugin-dev` project at
 dependencies and the packager; the runtime stays in the engine. The Cargo package is
 `vera20k-ares`, its raw core artifact is `vera20k_ares.wasm`, and its publication
 filename is `vera20k-ares.wasm`. The internal `vera.reference-gameplay` identity is retained. Current source is
-version 0.33.0, config_version=23 and state_version=1. API v1 and WIT are unchanged. The filename
+version 0.34.0, config_version=23 and state_version=1. API v1 and WIT are unchanged. The filename
 does not claim complete Ares compatibility; the retained Phobos-compatible
 shield and authored overload remain examples in this first plugin.
 
@@ -25,7 +25,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development candidate is 0.33.0, configuration version 23 and entity state
+Current development candidate is 0.34.0, configuration version 23 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
@@ -414,6 +414,12 @@ Cooling=1
 
 With Overload=no, the component ignores that parameter section. `examples/shield.ini` uses only
 original-game unit names and fictional shield data; it contains no artwork.
+
+The 0.34 host retains the actual `AirburstWeapon` allocation through rule
+persistence and the original/Ares child factories. It consumes this plugin's
+existing instance policies without a new callback or configuration schema. The
+Ares child keeps its installed Weapon null; other type/factory identity gaps
+remain separate.
 
 Version 0.33 adds the optional `weapon_instance_resource` query. Its stable WeaponType
 array ordinal selects retained Ammo, ApplyDamage and ProjectileRange configuration;

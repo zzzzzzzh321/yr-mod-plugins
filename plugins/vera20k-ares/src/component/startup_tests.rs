@@ -141,7 +141,7 @@ fn startup_capabilities_are_pure_installation_declarations_without_feature_confi
         assert!(manifest().hooks.contains(&request.context.kind()));
     }
     let manifest = manifest();
-    assert_eq!(manifest.version, "0.33.0");
+    assert_eq!(manifest.version, "0.34.0");
     assert_eq!(
         (
             manifest.api_version,
