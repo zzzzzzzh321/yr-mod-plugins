@@ -25,7 +25,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development candidate is 0.29.0, configuration version 19 and entity state
+Current development candidate is 0.30.0, configuration version 20 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
@@ -46,6 +46,26 @@ presentation plus optional `loading_theme_resource`. Version 0.18 connects sideb
 EVA SetSide, message colors, GraphicalText and score consumption through the same
 frozen declarations and original presentation owners. Actual-component, legacy and real-retail
 loading checks passed for the bounded Country presentation chain; see the [Chinese guide](../../sdk/dev-kit/README.zh-CN.md#阵营共享配置与玩法).
+
+Version 0.30 adds the independent `features/weapons/projectile_range.rs` domain.
+It composes optional `projectile_range` into `weapon_firing_resource` and selects
+the host's travel-budget runtime once through `match_rules.projectile_fuel`.
+Fresh configuration and actual reset boundaries own the domain; nonempty older
+configuration, including 0.29 firing configuration, remains unowned. There is no
+extra INI enable flag. Completed physical Rules passes use the retained Weapon
+history and canonical host `ares-leptons` reader; final binding only freezes the
+result. The constructor default is exactly 100000 leptons (390.625 cells), and
+signed host results are retained without a positive clamp.
+
+This increment covers ordinary FireAt's initial weapon budget and shared flight
+and exhaustion detonation for `Ranged=yes`. Bare/shrapnel constructors keep an
+INT_MAX initial budget; other special creators and the replacement Airburst fan
+are not claimed complete. The host owns the live counter, motion, detonation,
+save and checksum, with no per-tick Wasm call or duplicate guest counter. Missing
+or false `projectile_fuel` selects retail behavior without fuel, including older
+guests. Config20/state1 keeps API v1 and WIT unchanged but requires the matching
+host fields and reader. Preserve exact component/engine pairs for full snapshots;
+candidate acceptance is tracked with the paired host checks.
 
 Version 0.29 adds optional `weapon_firing_resource` queries. The component
 selects directional muzzle-animation bins and reads Ares `ApplyDamage` through

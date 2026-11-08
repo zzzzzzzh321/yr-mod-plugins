@@ -2,4 +2,5 @@
 pub(crate) mod ammo_cost;
 pub(crate) mod empty_weapon;
 pub(crate) mod firing;
+pub(crate) mod projectile_range;
 pub(crate) mod reload;

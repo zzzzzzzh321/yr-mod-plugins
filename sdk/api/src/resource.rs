@@ -30,6 +30,10 @@ pub struct WeaponFiringPolicy {
     /// 65,536 selects the full-word, unwrapped art-offset mode; the host
     /// bounds-checks its resulting index rather than wrapping it to a bin.
     pub muzzle_facings: u32,
+    /// Initial travel budget in leptons for a weapon-aware bullet constructor.
+    /// The host owns its live counter; None preserves the older component path.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub projectile_range: Option<i32>,
 }
 
 impl WeaponFiringPolicy {
@@ -229,6 +233,7 @@ mod tests {
         plan.weapon_firing_resource = Some(WeaponFiringPolicy {
             apply_damage: true,
             muzzle_facings: 16,
+            projectile_range: None,
         });
         plan.validate_for(&request).unwrap();
         plan.state.push(1);

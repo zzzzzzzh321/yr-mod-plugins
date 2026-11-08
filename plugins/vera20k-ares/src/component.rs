@@ -11,7 +11,7 @@ use crate::{
         resources::{startup, loading_theme},
         superweapons,
         units::{attach_effect, cloak, emp, manual_control, spotlight, type_conversion},
-        weapons::{ammo_cost, empty_weapon, firing, reload},
+        weapons::{ammo_cost, empty_weapon, firing, projectile_range, reload},
     },
     support::{ConfigView, Host},
 };
@@ -134,15 +134,27 @@ pub(crate) struct Configuration {
     // Old nonempty frozen configuration does not acquire new firing rules.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     firing: Option<firing::Configuration>,
+    // Range ownership is separate from the older firing configuration cohort.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    projectile_range: Option<projectile_range::Configuration>,
+}
+
+impl Configuration {
+    fn validate_resource_domains(&self) -> Result<(), String> {
+        if self.projectile_range.is_some() && self.firing.is_none() {
+            return Err("projectile range configuration requires the firing domain".into());
+        }
+        Ok(())
+    }
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.29.0".into(),
+        version: "0.30.0".into(),
         state_version: 1,
-        config_version: 19,
+        config_version: 20,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -183,6 +195,7 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
             features: Features::for_new_match(),
             superweapons: Some(superweapons::Configuration::default()),
             firing: Some(firing::Configuration::default()),
+            projectile_range: Some(projectile_range::Configuration::default()),
             ..Configuration::default()
         })
     } else {
@@ -237,6 +250,9 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         return Ok(plan);
     }
     let mut config = decode_config(&request.config)?;
+    if !matches!(&request.context, Context::ConfigureBoundary(_)) {
+        config.validate_resource_domains()?;
+    }
     if let Context::ConfigureSuperRead(context) = &request.context {
         let view = ConfigView::new(host);
         let mut plan = Plan::unchanged(request);
@@ -326,6 +342,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             // Only subsequent ConfigureSuperRead visits initialize each Type.
             superweapons: Some(superweapons::Configuration::default()),
             firing: Some(firing::Configuration::default()),
+            projectile_range: Some(projectile_range::Configuration::default()),
             ..Configuration::default()
         };
         let mut plan = Plan::unchanged(request);
@@ -360,6 +377,9 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             config.promotion_sounds.configure(&view, &physical)?;
             if let Some(firing) = config.firing.as_mut() {
                 firing.configure(host)?;
+            }
+            if let Some(range) = config.projectile_range.as_mut() {
+                range.configure(host)?;
             }
         }
         if context.final_pass {
@@ -510,6 +530,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                 // The replacement fan remains explicitly unsupported rather
                 // than selecting the retail nine-child tail for this profile.
                 airburst_tail: Some(vera_mod_api::AirburstTailPolicy::UnsupportedReplacement),
+                projectile_fuel: config.projectile_range.as_ref().map(|_| true),
             });
             Ok(plan)
         }
@@ -533,8 +554,14 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         }
         Context::WeaponFiringResource(context) => {
             let mut plan = Plan::unchanged(request);
-            plan.weapon_firing_resource =
-                config.firing.as_ref().map(|firing| firing.policy(context));
+            plan.weapon_firing_resource = config.firing.as_ref().map(|firing| {
+                let mut policy = firing.policy(context);
+                policy.projectile_range = config
+                    .projectile_range
+                    .as_ref()
+                    .map(|range| range.initial_range(&context.weapon_name));
+                policy
+            });
             Ok(plan)
         }
         Context::WeaponResource(context) => {
@@ -624,6 +651,8 @@ mod firing_tests;
 mod foundation_tests;
 #[cfg(test)]
 mod production_tests;
+#[cfg(test)]
+mod projectile_range_tests;
 #[cfg(test)]
 mod promotion_sound_tests;
 #[cfg(test)]

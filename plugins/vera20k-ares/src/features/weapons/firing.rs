@@ -57,6 +57,7 @@ impl Configuration {
         WeaponFiringPolicy {
             apply_damage,
             muzzle_facings,
+            projectile_range: None,
         }
     }
 }

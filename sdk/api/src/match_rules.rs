@@ -50,6 +50,10 @@ pub struct MatchRulesPolicy {
     /// Selects the existing Bullet detonation tail. None keeps the host profile.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub airburst_tail: Option<AirburstTailPolicy>,
+    /// Enables the host's travel-budget state and shared flight/detonation seam.
+    /// Missing/false keeps retail behavior, independently of proximity fuses.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub projectile_fuel: Option<bool>,
 }
 
 /// The replacement fan is deliberately unavailable until its complete geometry
@@ -122,6 +126,7 @@ mod tests {
         assert_eq!(policy.anim_damage, None);
         assert_eq!(policy.warhead_house_filter, None);
         assert_eq!(policy.airburst_tail, None);
+        assert_eq!(policy.projectile_fuel, None);
         assert_eq!(serde_json::to_string(&policy).unwrap(), old);
         policy.script_type_conversion = Some(false);
         policy.registered_side_ui = Some(false);
@@ -129,6 +134,7 @@ mod tests {
         policy.anim_damage = Some(AnimDamagePolicy::default());
         policy.warhead_house_filter = Some(false);
         policy.airburst_tail = Some(AirburstTailPolicy::RetailFixedNine);
+        policy.projectile_fuel = Some(false);
         let bytes = serde_json::to_vec(&policy).unwrap();
         assert_eq!(
             serde_json::from_slice::<MatchRulesPolicy>(&bytes).unwrap(),

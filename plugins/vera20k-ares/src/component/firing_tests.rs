@@ -139,6 +139,10 @@ impl Host for PhaseHost {
                 self.physical,
                 "final binding must retain the physical declaration"
             );
+            if reader == "weapon-effective:ares-leptons" {
+                assert_eq!((key, current), ("ProjectileRange", &b"100000"[..]));
+                return Ok(current.to_vec());
+            }
             return FiringHost.config_read(section, key, reader, current);
         }
         if let Some(reply) =
