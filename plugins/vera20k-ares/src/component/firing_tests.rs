@@ -62,7 +62,11 @@ impl Host for FiringHost {
     ) -> Result<Vec<u8>, String> {
         assert_eq!(
             (key, reader, current),
-            ("ApplyDamage", "ares-nullable-bool", &b"null"[..])
+            (
+                "ApplyDamage",
+                "weapon-effective:ares-nullable-bool",
+                &b"null"[..]
+            )
         );
         // Predecoded results include a retained value despite a later invalid
         // physical value. Do not implement a second INI parser in this test.
@@ -74,7 +78,7 @@ impl Host for FiringHost {
         })
     }
     fn registry(&self, section: &str) -> Vec<String> {
-        assert_eq!(section, "$weapons");
+        assert_eq!(section, "$weapon-config");
         ["Gun", "gun", "Empty"]
             .into_iter()
             .map(str::to_owned)
@@ -112,6 +116,92 @@ fn firing_configuration_keeps_nullable_host_result_and_exact_weapon_identity() {
             .unwrap()
             .apply_damage
     );
+}
+
+/// Other configuration domains receive their declared empty catalogs and
+/// supplied scalar defaults. Only a physical pass exposes retained weapons.
+struct PhaseHost {
+    physical: bool,
+}
+impl Host for PhaseHost {
+    fn config(&self, _: &str, _: &str) -> Option<String> {
+        None
+    }
+    fn config_read(
+        &self,
+        section: &str,
+        key: &str,
+        reader: &str,
+        current: &[u8],
+    ) -> Result<Vec<u8>, String> {
+        if reader.starts_with("weapon-effective:") {
+            assert!(
+                self.physical,
+                "final binding must retain the physical declaration"
+            );
+            return FiringHost.config_read(section, key, reader, current);
+        }
+        if let Some(reply) =
+            crate::component::tests::empty_super_sources(section, key, reader, current)
+        {
+            return reply;
+        }
+        match reader {
+            "rules-registry-view" => {
+                serde_json::to_vec(&vera_mod_api::ProductionRegistryView::default())
+            }
+            "faction-registry-view" => {
+                serde_json::to_vec(&vera_mod_api::FactionRegistryView::default())
+            }
+            _ => return Ok(current.to_vec()),
+        }
+        .map_err(|e| e.to_string())
+    }
+    fn registry(&self, section: &str) -> Vec<String> {
+        if section == "$weapon-config" {
+            assert!(self.physical, "final binding has no physical registry view");
+            return FiringHost.registry(section);
+        }
+        vec![]
+    }
+    fn damage_kernel(&self, _: &DamageKernelInput) -> Result<i32, String> {
+        panic!("configuration never calculates damage")
+    }
+}
+
+#[test]
+fn final_binding_retains_firing_declarations_from_completed_physical_rules_pass() {
+    let mut config = vec![];
+    for final_pass in [false, true] {
+        let request = Request {
+            api_version: API_VERSION,
+            context: Context::Configure(vera_mod_api::ConfigureContext {
+                pass: if final_pass { 1 } else { 0 },
+                source: "decoded-firing-phase".into(),
+                final_pass,
+                object_types: vec![],
+                warheads: vec![],
+            }),
+            config,
+            state: vec![],
+        };
+        let plan = evaluate(
+            &request,
+            &PhaseHost {
+                physical: !final_pass,
+            },
+        )
+        .unwrap();
+        plan.validate_for(&request).unwrap();
+        config = plan.config.unwrap();
+        assert!(
+            frozen_query(&config, query("Gun", 16, true, false))
+                .weapon_firing_resource
+                .unwrap()
+                .apply_damage,
+            "both physical configuration and final binding retain the explicit override"
+        );
+    }
 }
 
 #[test]

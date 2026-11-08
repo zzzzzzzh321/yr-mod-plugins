@@ -49,7 +49,10 @@ loading checks passed for the bounded Country presentation chain; see the [Chine
 
 Version 0.29 adds optional `weapon_firing_resource` queries. The component
 selects directional muzzle-animation bins and reads Ares `ApplyDamage` through
-the shared nullable-bool reader, without another enable flag. The host retains
+the shared nullable-bool reader over the retained Weapon body history. A later
+same-ID Projectile body cannot replace that source. Completed physical Rules
+passes update the declaration; final binding retains it without rereading. No
+extra enable flag is required. The host retains
 animation identities, coordinates, damage stages and the original AI estimate;
 `ApplyDamage` changes ordinary FireAt damage, not that separate estimate. The
 new capability requires its matching host. Older guests keep their original

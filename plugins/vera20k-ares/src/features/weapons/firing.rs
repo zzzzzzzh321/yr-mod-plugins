@@ -13,14 +13,18 @@ pub(crate) struct Configuration {
 impl Configuration {
     pub(crate) fn configure<H: Host>(&mut self, host: &H) -> Result<(), String> {
         self.apply_damage.clear();
-        // The final source retains the ordered physical reads. Use its native
-        // Nullable<bool> reader: invalid/empty later values do not erase a
-        // successful earlier value, and an absent override remains unset.
-        // A raw latest-value presence probe cannot replace that history.
+        // Native weapon bodies retain their own ordered physical reads. A later
+        // same-ID Projectile section must not replace that source. The scoped
+        // service still uses the native Nullable<bool> reader, so empty/invalid
+        // later values retain the previous successful value and presence.
         let view = ConfigView::native_only(host);
-        for name in host.registry("$weapons") {
-            let section = view.section_or_empty(&name);
-            if let Some(value) = section.read_ares_nullable_bool("ApplyDamage", None) {
+        for name in host.registry("$weapon-config") {
+            if let Some(value) = view.retained_weapon_read::<Option<bool>>(
+                &name,
+                "ApplyDamage",
+                "ares-nullable-bool",
+                None,
+            )? {
                 self.apply_damage.insert(name, value);
             }
         }

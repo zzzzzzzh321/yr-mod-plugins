@@ -358,13 +358,13 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             config.emp.configure(&view, &physical);
             config.spotlight.configure(&view, &physical)?;
             config.promotion_sounds.configure(&view, &physical)?;
+            if let Some(firing) = config.firing.as_mut() {
+                firing.configure(host)?;
+            }
         }
         if context.final_pass {
             config.spotlight.finalize(context);
             config.features.validate()?;
-            if let Some(firing) = config.firing.as_mut() {
-                firing.configure(host)?;
-            }
             if config.features.ares_ammo {
                 config.ammunition.configure(host, &view);
             }

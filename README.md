@@ -48,7 +48,7 @@ cargo run --locked --release -p vera-mod-pack -- target/wasm32-unknown-unknown/r
 
 `sdk/api` 和 `sdk/wit` 是版本固定的开发依赖快照，记录在 [sdk/source.json](sdk/source.json)。接口的权威源码位于相邻引擎工程，升级 SDK 时从权威版本同步，保持双方接口匹配。日常插件编译只读取本地快照，不访问引擎目录。
 
-0.29 开发候选新增可选 `weapon_firing_resource`，接入 Ares 多方向开火动画与 `ApplyDamage`，实现位于 `features/weapons/firing.rs`。安装后无需额外启用开关：`Anim` 列表按最大的完整二次幂方向数选择，普通武器默认保留直接伤害，声波／喷火粒子武器默认关闭，`ApplyDamage` 可显式覆盖。配置使用已有 Ares nullable 布尔读取器保留物理层历史；查询只读冻结配置。已有 AI 伤害估值、动画引用、坐标、伤害缩放与构造仍由原引擎负责，`ApplyDamage` 不扩展到 AI 估值。当前为 config19／state1／API v1，需支持新 Hook 的配套引擎；旧组件不接收新请求，旧非空配置不自动补入新功能。
+0.29 开发候选新增可选 `weapon_firing_resource`，接入 Ares 多方向开火动画与 `ApplyDamage`，实现位于 `features/weapons/firing.rs`。安装后无需额外启用开关：`Anim` 列表按最大的完整二次幂方向数选择，普通武器默认保留直接伤害，声波／喷火粒子武器默认关闭，`ApplyDamage` 可显式覆盖。配置通过宿主保留的 Weapon 专属物理读取历史调用已有 Ares nullable 布尔读取器，同名 Projectile 后续读取不会替换武器来源。完整 Rules 物理读取结束时更新声明，最终绑定阶段保留这些声明而不重读；资源查询只读冻结配置。已有 AI 伤害估值、动画引用、坐标、伤害缩放与构造仍由原引擎负责，`ApplyDamage` 不扩展到 AI 估值。当前为 config19／state1／API v1，需支持新 Hook 的配套引擎；旧组件不接收新请求，旧非空配置不自动补入新功能。
 
 0.28 将引擎已有的超武扩展接入 `features/superweapons/`。`configure_super_read` 在原规则读取时点处理首次访问和 `SW.Warhead` 引用；`superweapon_resource` 在配置结束后一次性提供挂载、使用条件、初始/虚拟充能、费用、通用弹头、单位投送及演出声明。作者直接使用既有 Ares INI 标签，无需额外启用标签。Host 共用原数值、列表和固定音频目录读取接口；计时、发射次数、钱包、两阶段选择和投送队列继续由原引擎所有者维护，Wasm 不逐帧改写这些状态。
 
