@@ -19,6 +19,94 @@ pub struct WeaponFiringResourceContext {
     pub use_fire_particles: bool,
 }
 
+/// Stable index in the native WeaponType array. Stored IDs may be repeated;
+/// the host validates this index against the current physical Rules source.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WeaponTypeRef {
+    pub ordinal: u32,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WeaponRegisteredType {
+    pub identity: WeaponTypeRef,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WeaponRegistryView {
+    pub weapons: Vec<WeaponRegisteredType>,
+}
+
+impl WeaponRegistryView {
+    pub fn validate(&self) -> Result<(), String> {
+        for (ordinal, weapon) in self.weapons.iter().enumerate() {
+            if usize::try_from(weapon.identity.ordinal).ok() != Some(ordinal)
+                || !valid_weapon_name(&weapon.name)
+            {
+                return Err("invalid WeaponType instance catalog".into());
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Input to the retained instance reader; it cannot select another family or
+/// replace the host's actual physical source with a guest-supplied catalog.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WeaponReadValue<T> {
+    pub identity: WeaponTypeRef,
+    pub current: T,
+}
+
+/// Immutable facts for a particular WeaponType, rather than a name lookup.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WeaponInstanceResourceContext {
+    pub identity: WeaponTypeRef,
+    pub weapon_name: String,
+    pub animation_count: u32,
+    pub is_sonic: bool,
+    pub use_fire_particles: bool,
+}
+
+impl WeaponInstanceResourceContext {
+    pub fn validate(&self) -> Result<(), String> {
+        if !valid_weapon_name(&self.weapon_name) {
+            return Err("invalid WeaponType stored ID".into());
+        }
+        Ok(())
+    }
+}
+
+fn valid_weapon_name(name: &str) -> bool {
+    !name.is_empty() && name.len() <= 256 && !name.chars().any(char::is_control)
+}
+
+/// Some on Plan owns this instance even when both policies are disabled.
+/// None leaves historical configuration on the legacy, unique-name path.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WeaponInstanceResourcePolicy {
+    pub resource: Option<WeaponResourcePolicy>,
+    pub firing: Option<WeaponFiringPolicy>,
+}
+
+impl WeaponInstanceResourcePolicy {
+    pub fn validate_for(self, context: &WeaponInstanceResourceContext) -> Result<(), String> {
+        if let Some(resource) = self.resource {
+            resource.validate()?;
+        }
+        if let Some(firing) = self.firing {
+            firing.validate_animation_count(context.animation_count)?;
+        }
+        Ok(())
+    }
+}
+
 /// Stateless inputs for the existing shot-damage and muzzle-animation owners.
 /// The component chooses the number of facing bins; the host retains the
 /// animation references, firing coordinates, damage stages and shot lifecycle.
@@ -38,12 +126,16 @@ pub struct WeaponFiringPolicy {
 
 impl WeaponFiringPolicy {
     pub fn validate_for(self, context: &WeaponFiringResourceContext) -> Result<(), String> {
-        if context.animation_count == 0 {
+        self.validate_animation_count(context.animation_count)
+    }
+
+    fn validate_animation_count(self, animation_count: u32) -> Result<(), String> {
+        if animation_count == 0 {
             if self.muzzle_facings != 0 {
                 return Err("empty muzzle animation list has no facing bins".into());
             }
         } else if !self.muzzle_facings.is_power_of_two()
-            || self.muzzle_facings > context.animation_count
+            || self.muzzle_facings > animation_count
             || self.muzzle_facings > 65_536
         {
             return Err(
@@ -84,6 +176,14 @@ fn is_false(value: &bool) -> bool {
 }
 
 impl WeaponResourcePolicy {
+    pub fn validate(self) -> Result<(), String> {
+        let supported_users = WEAPON_USER_UNIT | WEAPON_USER_INFANTRY | WEAPON_USER_BUILDING;
+        if self.users == 0 || self.users & !supported_users != 0 {
+            return Err("invalid weapon resource policy".into());
+        }
+        Ok(())
+    }
+
     pub fn applies_to(self, user: u8) -> bool {
         self.users & user != 0
     }
@@ -312,5 +412,79 @@ mod tests {
             serde_json::from_slice::<WeaponResourcePolicy>(&bytes).unwrap(),
             policy
         );
+    }
+
+    #[test]
+    fn weapon_instance_contract_preserves_legacy_wire_and_validates_owned_policies() {
+        use crate::{API_VERSION, Context, Plan, Request};
+        let old = r#"{"weapon_name":"Gun"}"#;
+        let legacy: WeaponResourceContext = serde_json::from_str(old).unwrap();
+        assert_eq!(serde_json::to_string(&legacy).unwrap(), old);
+        assert!(
+            serde_json::from_str::<WeaponResourceContext>(
+                r#"{"weapon_name":"Gun","identity":{"ordinal":0}}"#
+            )
+            .is_err()
+        );
+        let mut registry = WeaponRegistryView {
+            weapons: vec![
+                WeaponRegisteredType {
+                    identity: WeaponTypeRef { ordinal: 0 },
+                    name: "Gun".into(),
+                },
+                WeaponRegisteredType {
+                    identity: WeaponTypeRef { ordinal: 1 },
+                    name: "Gun".into(),
+                },
+            ],
+        };
+        registry.validate().unwrap();
+        registry.weapons[1].identity.ordinal = 0;
+        assert!(registry.validate().is_err());
+        let mut request = Request {
+            api_version: API_VERSION,
+            config: vec![],
+            state: vec![],
+            context: Context::WeaponInstanceResource(WeaponInstanceResourceContext {
+                identity: WeaponTypeRef { ordinal: 0 },
+                weapon_name: "Gun".into(),
+                animation_count: 8,
+                is_sonic: false,
+                use_fire_particles: false,
+            }),
+        };
+        let mut plan = Plan::unchanged(&request);
+        plan.weapon_instance_resource = Some(WeaponInstanceResourcePolicy::default());
+        plan.validate_for(&request).unwrap();
+        plan.weapon_instance_resource.as_mut().unwrap().resource = Some(WeaponResourcePolicy {
+            cost: 0,
+            reload_after_use: false,
+            users: WEAPON_USER_AIRCRAFT,
+            use_weapon_rof: false,
+        });
+        assert!(plan.validate_for(&request).is_err());
+        plan.weapon_instance_resource
+            .as_mut()
+            .unwrap()
+            .resource
+            .as_mut()
+            .unwrap()
+            .users = WEAPON_USER_UNIT;
+        plan.weapon_instance_resource.as_mut().unwrap().firing = Some(WeaponFiringPolicy {
+            apply_damage: true,
+            muzzle_facings: 16,
+            projectile_range: Some(0),
+        });
+        assert!(plan.validate_for(&request).is_err());
+        plan.weapon_instance_resource
+            .as_mut()
+            .unwrap()
+            .firing
+            .as_mut()
+            .unwrap()
+            .muzzle_facings = 8;
+        plan.validate_for(&request).unwrap();
+        request.context = Context::WeaponResource(legacy);
+        assert!(plan.validate_for(&request).is_err());
     }
 }

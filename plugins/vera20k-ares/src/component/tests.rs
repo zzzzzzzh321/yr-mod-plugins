@@ -28,12 +28,18 @@ pub(super) fn empty_super_sources(
 ) -> Option<Result<Vec<u8>, String>> {
     if !matches!(
         reader,
-        "superweapon-registry-view" | "sound-source-hash" | "eva-source-hash" | "eva-find"
+        "superweapon-registry-view"
+            | "weapon-registry-view"
+            | "sound-source-hash"
+            | "eva-source-hash"
+            | "eva-find"
     ) {
         return None;
     }
     assert_eq!((section, key), ("", ""));
     Some(match reader {
+        "weapon-registry-view" => serde_json::to_vec(&vera_mod_api::WeaponRegistryView::default())
+            .map_err(|e| e.to_string()),
         "superweapon-registry-view" => {
             serde_json::to_vec(&vera_mod_api::SuperWeaponRegistryView::default())
                 .map_err(|e| e.to_string())

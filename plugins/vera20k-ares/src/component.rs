@@ -100,6 +100,8 @@ pub(crate) struct Configuration {
     features: Features,
     #[serde(flatten)]
     shield: shield::Configuration,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    weapon_instances: Option<vera_mod_api::WeaponRegistryView>,
     ammunition: ammo_cost::Ammunition,
     reload: reload::Configuration,
     empty_weapon: empty_weapon::Configuration,
@@ -148,6 +150,17 @@ pub(crate) struct Configuration {
 
 impl Configuration {
     fn validate_resource_domains(&self) -> Result<(), String> {
+        if let Some(registry) = &self.weapon_instances {
+            registry.validate()?;
+            let count = registry.weapons.len();
+            self.ammunition.validate_instances(count)?;
+            if let Some(firing) = &self.firing {
+                firing.validate_instances(count)?;
+            }
+            if let Some(range) = &self.projectile_range {
+                range.validate_instances(count)?;
+            }
+        }
         if self.projectile_range.is_some() && self.firing.is_none() {
             return Err("projectile range configuration requires the firing domain".into());
         }
@@ -156,15 +169,73 @@ impl Configuration {
         }
         Ok(())
     }
+
+    fn weapon_identity(&self, name: &str) -> Result<Option<vera_mod_api::WeaponTypeRef>, String> {
+        let Some(registry) = self
+            .weapon_instances
+            .as_ref()
+            .filter(|registry| !registry.weapons.is_empty())
+        else {
+            return Ok(None);
+        };
+        let mut matches = registry
+            .weapons
+            .iter()
+            .filter(|weapon| weapon.name.eq_ignore_ascii_case(name));
+        let first = matches.next().ok_or("unknown frozen WeaponType name")?;
+        if matches.next().is_some() {
+            return Err("legacy weapon query cannot select a colliding WeaponType instance".into());
+        }
+        Ok(Some(first.identity))
+    }
+
+    fn weapon_resource_policy(
+        &self,
+        name: &str,
+        identity: Option<vera_mod_api::WeaponTypeRef>,
+    ) -> Result<Option<vera_mod_api::WeaponResourcePolicy>, String> {
+        if !self.features.ares_ammo {
+            return Ok(None);
+        }
+        Ok(Some(match identity {
+            Some(identity) => self.ammunition.instance_policy(identity)?,
+            None => self.ammunition.policy(name),
+        }))
+    }
+
+    fn weapon_firing_policy(
+        &self,
+        context: &vera_mod_api::WeaponFiringResourceContext,
+        identity: Option<vera_mod_api::WeaponTypeRef>,
+    ) -> Result<Option<vera_mod_api::WeaponFiringPolicy>, String> {
+        self.firing
+            .as_ref()
+            .map(|firing| {
+                let mut policy = match identity {
+                    Some(identity) => firing.instance_policy(identity, context)?,
+                    None => firing.policy(context),
+                };
+                policy.projectile_range = self
+                    .projectile_range
+                    .as_ref()
+                    .map(|range| match identity {
+                        Some(identity) => range.instance_range(identity),
+                        None => Ok(range.initial_range(&context.weapon_name)),
+                    })
+                    .transpose()?;
+                Ok(policy)
+            })
+            .transpose()
+    }
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.32.0".into(),
+        version: "0.33.0".into(),
         state_version: 1,
-        config_version: 22,
+        config_version: 23,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -196,6 +267,7 @@ pub fn manifest() -> ModuleManifest {
             HookKind::CameoResource,
             HookKind::TypeSoundResource,
             HookKind::ProjectileResource,
+            HookKind::WeaponInstanceResource,
         ],
     }
 }
@@ -209,6 +281,7 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
             projectile_range: Some(projectile_range::Configuration::default()),
             airburst: Some(airburst::Configuration::default()),
             ballistic_scatter: Some(ballistic_scatter::Configuration::default()),
+            weapon_instances: Some(vera_mod_api::WeaponRegistryView::default()),
             ..Configuration::default()
         })
     } else {
@@ -358,6 +431,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             projectile_range: Some(projectile_range::Configuration::default()),
             airburst: Some(airburst::Configuration::default()),
             ballistic_scatter: Some(ballistic_scatter::Configuration::default()),
+            weapon_instances: Some(vera_mod_api::WeaponRegistryView::default()),
             ..Configuration::default()
         };
         let mut plan = Plan::unchanged(request);
@@ -390,11 +464,23 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             config.emp.configure(&view, &physical);
             config.spotlight.configure(&view, &physical)?;
             config.promotion_sounds.configure(&view, &physical)?;
-            if let Some(firing) = config.firing.as_mut() {
-                firing.configure(host)?;
-            }
-            if let Some(range) = config.projectile_range.as_mut() {
-                range.configure(host)?;
+            if let Some(registry) = config.weapon_instances.as_mut() {
+                *registry = view.weapon_registry_view()?;
+                config.ammunition.configure_instances(&view, registry)?;
+                if let Some(firing) = config.firing.as_mut() {
+                    firing.configure_instances(&view, registry)?;
+                }
+                if let Some(range) = config.projectile_range.as_mut() {
+                    range.configure_instances(&view, registry)?;
+                }
+            } else {
+                // Historical nonempty configuration keeps its original cohort.
+                if let Some(firing) = config.firing.as_mut() {
+                    firing.configure(host)?;
+                }
+                if let Some(range) = config.projectile_range.as_mut() {
+                    range.configure(host)?;
+                }
             }
             if let Some(airburst) = config.airburst.as_mut() {
                 airburst.configure(host)?;
@@ -406,7 +492,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         if context.final_pass {
             config.spotlight.finalize(context);
             config.features.validate()?;
-            if config.features.ares_ammo {
+            if config.features.ares_ammo && config.weapon_instances.is_none() {
                 config.ammunition.configure(host, &view);
             }
             if config.features.ares_reload {
@@ -422,6 +508,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                 config.survival.configure(context, &view);
             }
         }
+        config.validate_resource_domains()?;
         // Always accumulate shield definitions: a later layer may enable them.
         config
             .shield
@@ -590,23 +677,43 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             }
             Ok(plan)
         }
+        Context::WeaponInstanceResource(context) => {
+            let mut plan = Plan::unchanged(request);
+            if let Some(registry) = &config.weapon_instances {
+                let registered = registry
+                    .weapons
+                    .get(context.identity.ordinal as usize)
+                    .ok_or("unknown frozen WeaponType ordinal")?;
+                if registered.identity != context.identity || registered.name != context.weapon_name
+                {
+                    return Err("WeaponType instance query differs from frozen identity".into());
+                }
+                let firing_context = vera_mod_api::WeaponFiringResourceContext {
+                    weapon_name: context.weapon_name.clone(),
+                    animation_count: context.animation_count,
+                    is_sonic: context.is_sonic,
+                    use_fire_particles: context.use_fire_particles,
+                };
+                plan.weapon_instance_resource = Some(vera_mod_api::WeaponInstanceResourcePolicy {
+                    resource: config
+                        .weapon_resource_policy(&context.weapon_name, Some(context.identity))?,
+                    firing: config.weapon_firing_policy(&firing_context, Some(context.identity))?,
+                });
+            }
+            Ok(plan)
+        }
         Context::WeaponFiringResource(context) => {
             let mut plan = Plan::unchanged(request);
-            plan.weapon_firing_resource = config.firing.as_ref().map(|firing| {
-                let mut policy = firing.policy(context);
-                policy.projectile_range = config
-                    .projectile_range
-                    .as_ref()
-                    .map(|range| range.initial_range(&context.weapon_name));
-                policy
-            });
+            plan.weapon_firing_resource = config
+                .weapon_firing_policy(context, config.weapon_identity(&context.weapon_name)?)?;
             Ok(plan)
         }
         Context::WeaponResource(context) => {
             let mut plan = Plan::unchanged(request);
-            if config.features.ares_ammo {
-                plan.weapon_resource = Some(config.ammunition.policy(&context.weapon_name));
-            }
+            plan.weapon_resource = config.weapon_resource_policy(
+                &context.weapon_name,
+                config.weapon_identity(&context.weapon_name)?,
+            )?;
             Ok(plan)
         }
         Context::TypeResource(context) => {
@@ -705,3 +812,6 @@ mod startup_tests;
 mod tests;
 #[cfg(test)]
 mod type_conversion_tests;
+
+#[cfg(test)]
+mod weapon_instance_tests;

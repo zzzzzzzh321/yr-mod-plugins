@@ -235,6 +235,7 @@ pub(crate) fn evaluate<H: Host>(
         }
         Context::WeaponResource(_)
         | Context::WeaponFiringResource(_)
+        | Context::WeaponInstanceResource(_)
         | Context::ProjectileResource(_)
         | Context::TypeResource(_)
         | Context::MatchRules(_)

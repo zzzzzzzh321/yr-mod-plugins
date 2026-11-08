@@ -6,15 +6,15 @@
 
 use crate::support::{ConfigView, Host};
 use std::collections::BTreeMap;
-use vera_mod_api::{
-    WEAPON_USER_BUILDING, WEAPON_USER_INFANTRY, WEAPON_USER_UNIT, WeaponResourcePolicy,
-};
+use vera_mod_api::{WEAPON_USER_BUILDING, WEAPON_USER_INFANTRY, WEAPON_USER_UNIT, WeaponResourcePolicy};
 
 /// The native merged-section reader replays retained physical values. Failed
 /// or empty later reads keep the prior successful cost; no parser is copied.
 #[derive(Default, serde::Serialize, serde::Deserialize)]
 pub(crate) struct Ammunition {
     costs: BTreeMap<String, i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    instance_costs: Option<Vec<i32>>,
 }
 
 impl Ammunition {
@@ -31,8 +31,61 @@ impl Ammunition {
         }
     }
 
+    pub(crate) fn configure_instances<H: Host>(
+        &mut self,
+        view: &ConfigView<'_, H>,
+        registry: &vera_mod_api::WeaponRegistryView,
+    ) -> Result<(), String> {
+        // WeaponTypeExt ctor100549B4 starts Ammo at1; reader10055898
+        // follows Owner+24/HasSection10055520 on this exact Weapon object.
+        self.instance_costs = Some(
+            registry
+                .weapons
+                .iter()
+                .map(|weapon| {
+                    view.retained_weapon_instance_read(
+                        weapon.identity,
+                        &weapon.name,
+                        "Ammo",
+                        "ares-int",
+                        1,
+                    )
+                })
+                .collect::<Result<_, _>>()?,
+        );
+        self.costs.clear();
+        Ok(())
+    }
+
+    pub(crate) fn validate_instances(&self, count: usize) -> Result<(), String> {
+        if self
+            .instance_costs
+            .as_ref()
+            .map_or(count != 0, |values| values.len() != count)
+        {
+            return Err("Ammo instance configuration differs from WeaponType catalog".into());
+        }
+        Ok(())
+    }
+
+    pub(crate) fn instance_policy(
+        &self,
+        identity: vera_mod_api::WeaponTypeRef,
+    ) -> Result<WeaponResourcePolicy, String> {
+        let cost = self
+            .instance_costs
+            .as_ref()
+            .and_then(|values| values.get(identity.ordinal as usize))
+            .copied()
+            .ok_or("missing WeaponType Ammo instance")?;
+        Ok(Self::policy_for_cost(cost))
+    }
+
     pub fn policy(&self, weapon: &str) -> WeaponResourcePolicy {
-        let cost = self.costs.get(weapon).copied().unwrap_or(1);
+        Self::policy_for_cost(self.costs.get(weapon).copied().unwrap_or(1))
+    }
+
+    fn policy_for_cost(cost: i32) -> WeaponResourcePolicy {
         WeaponResourcePolicy {
             cost,
             reload_after_use: cost > 0,

@@ -64,6 +64,36 @@ impl<'a, H: Host> ConfigView<'a, H> {
     pub fn registered_names(&self, registry: &str) -> Vec<String> {
         self.host.registry(registry)
     }
+    pub fn weapon_registry_view(&self) -> Result<vera_mod_api::WeaponRegistryView, String> {
+        let bytes = self
+            .host
+            .config_read("", "", "weapon-registry-view", b"null")?;
+        let view: vera_mod_api::WeaponRegistryView =
+            serde_json::from_slice(&bytes).map_err(|e| format!("WeaponType registry view: {e}"))?;
+        view.validate()?;
+        Ok(view)
+    }
+
+    pub fn retained_weapon_instance_read<T: Serialize + DeserializeOwned>(
+        &self,
+        identity: vera_mod_api::WeaponTypeRef,
+        owner: &str,
+        key: &str,
+        reader: &str,
+        current: T,
+    ) -> Result<T, String> {
+        let input = vera_mod_api::WeaponReadValue { identity, current };
+        let input = serde_json::to_vec(&input).map_err(|e| e.to_string())?;
+        let bytes = self.host.config_read(
+            owner,
+            key,
+            &format!("weapon-instance-effective:{reader}"),
+            &input,
+        )?;
+        serde_json::from_slice(&bytes)
+            .map_err(|e| format!("WeaponType instance reader {reader}: {e}"))
+    }
+
     /// Read the selected native weapon's retained body history. A flat final
     /// INI section can belong to a later same-ID family and is not a source
     /// for this query. The host owns chronology and the existing scalar parser.

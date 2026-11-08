@@ -23,6 +23,42 @@ impl Host for RangeHost {
         reader: &str,
         current: &[u8],
     ) -> Result<Vec<u8>, String> {
+        if reader == "weapon-registry-view" {
+            assert!(self.physical);
+            let names = ["Gun", "Zero", "Default"];
+            return serde_json::to_vec(&vera_mod_api::WeaponRegistryView {
+                weapons: names
+                    .iter()
+                    .enumerate()
+                    .map(|(ordinal, name)| vera_mod_api::WeaponRegisteredType {
+                        identity: vera_mod_api::WeaponTypeRef {
+                            ordinal: ordinal as u32,
+                        },
+                        name: (*name).into(),
+                    })
+                    .collect(),
+            })
+            .map_err(|e| e.to_string());
+        }
+        if let Some(scalar) = reader.strip_prefix("weapon-instance-effective:") {
+            let input: vera_mod_api::WeaponReadValue<serde_json::Value> =
+                serde_json::from_slice(current).map_err(|e| e.to_string())?;
+            assert_eq!(
+                ["Gun", "Zero", "Default"][input.identity.ordinal as usize],
+                section
+            );
+            let current = serde_json::to_vec(&input.current).unwrap();
+            if key == "Ammo" {
+                assert_eq!((scalar, current.as_slice()), ("ares-int", &b"1"[..]));
+                return Ok(current);
+            }
+            return self.config_read(
+                section,
+                key,
+                &format!("weapon-effective:{scalar}"),
+                &current,
+            );
+        }
         if reader.starts_with("weapon-effective:") {
             assert!(
                 self.physical,

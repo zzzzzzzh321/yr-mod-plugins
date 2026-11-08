@@ -8,6 +8,8 @@ use vera_mod_api::{WeaponFiringPolicy, WeaponFiringResourceContext};
 #[derive(Default, Serialize, Deserialize)]
 pub(crate) struct Configuration {
     apply_damage: BTreeMap<String, bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    instance_apply_damage: Option<Vec<Option<bool>>>,
 }
 
 impl Configuration {
@@ -31,15 +33,70 @@ impl Configuration {
         view.finish()
     }
 
+    pub(crate) fn configure_instances<H: Host>(
+        &mut self,
+        view: &ConfigView<'_, H>,
+        registry: &vera_mod_api::WeaponRegistryView,
+    ) -> Result<(), String> {
+        self.instance_apply_damage = Some(
+            registry
+                .weapons
+                .iter()
+                .map(|weapon| {
+                    view.retained_weapon_instance_read(
+                        weapon.identity,
+                        &weapon.name,
+                        "ApplyDamage",
+                        "ares-nullable-bool",
+                        None::<bool>,
+                    )
+                })
+                .collect::<Result<_, _>>()?,
+        );
+        self.apply_damage.clear();
+        Ok(())
+    }
+
+    pub(crate) fn validate_instances(&self, count: usize) -> Result<(), String> {
+        if self
+            .instance_apply_damage
+            .as_ref()
+            .map_or(count != 0, |values| values.len() != count)
+        {
+            return Err("firing instance configuration differs from WeaponType catalog".into());
+        }
+        Ok(())
+    }
+
+    pub(crate) fn instance_policy(
+        &self,
+        identity: vera_mod_api::WeaponTypeRef,
+        context: &WeaponFiringResourceContext,
+    ) -> Result<WeaponFiringPolicy, String> {
+        let value = self
+            .instance_apply_damage
+            .as_ref()
+            .and_then(|values| values.get(identity.ordinal as usize))
+            .copied()
+            .ok_or("missing WeaponType firing instance")?;
+        Ok(Self::policy_with_override(context, value))
+    }
+
     pub(crate) fn policy(&self, context: &WeaponFiringResourceContext) -> WeaponFiringPolicy {
+        Self::policy_with_override(
+            context,
+            self.apply_damage.get(&context.weapon_name).copied(),
+        )
+    }
+
+    fn policy_with_override(
+        context: &WeaponFiringResourceContext,
+        value: Option<bool>,
+    ) -> WeaponFiringPolicy {
         // Ares Fire_AllowDamage1004A370, installed6FE31C: a present
         // Nullable<bool> overrides the Sonic/fire-particle default. This does
         // not select the separate EstimateDamage6FDB80 path.
-        let apply_damage = self
-            .apply_damage
-            .get(&context.weapon_name)
-            .copied()
-            .unwrap_or(!context.is_sonic && !context.use_fire_particles);
+        let apply_damage = value.unwrap_or(!context.is_sonic && !context.use_fire_particles);
         // Ares TechnoClass_Fire_Facings10047CF0, installed6FF2D1: floor(log2(Count)),
         // fewer than eight entries select the first; exponents >=16 use the
         // direction-word special case. The host owns its actual index/read.

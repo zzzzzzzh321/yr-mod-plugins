@@ -9,6 +9,8 @@ const DEFAULT_RANGE: i32 = 100_000;
 #[derive(Default, Serialize, Deserialize)]
 pub(crate) struct Configuration {
     ranges: BTreeMap<String, i32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    instance_ranges: Option<Vec<i32>>,
 }
 
 impl Configuration {
@@ -30,6 +32,52 @@ impl Configuration {
             }
         }
         view.finish()
+    }
+
+    pub(crate) fn configure_instances<H: Host>(
+        &mut self,
+        view: &ConfigView<'_, H>,
+        registry: &vera_mod_api::WeaponRegistryView,
+    ) -> Result<(), String> {
+        self.instance_ranges = Some(
+            registry
+                .weapons
+                .iter()
+                .map(|weapon| {
+                    view.retained_weapon_instance_read(
+                        weapon.identity,
+                        &weapon.name,
+                        "ProjectileRange",
+                        "ares-leptons",
+                        DEFAULT_RANGE,
+                    )
+                })
+                .collect::<Result<_, _>>()?,
+        );
+        self.ranges.clear();
+        Ok(())
+    }
+
+    pub(crate) fn validate_instances(&self, count: usize) -> Result<(), String> {
+        if self
+            .instance_ranges
+            .as_ref()
+            .map_or(count != 0, |values| values.len() != count)
+        {
+            return Err("range instance configuration differs from WeaponType catalog".into());
+        }
+        Ok(())
+    }
+
+    pub(crate) fn instance_range(
+        &self,
+        identity: vera_mod_api::WeaponTypeRef,
+    ) -> Result<i32, String> {
+        self.instance_ranges
+            .as_ref()
+            .and_then(|values| values.get(identity.ordinal as usize))
+            .copied()
+            .ok_or_else(|| "missing WeaponType range instance".into())
     }
 
     pub(crate) fn initial_range(&self, weapon_name: &str) -> i32 {

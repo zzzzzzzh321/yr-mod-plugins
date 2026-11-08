@@ -74,7 +74,9 @@ pub use resource::{
     DepletedWeaponPolicy, InputPolicy, ReloadPolicy, SpotlightAttachment, SpotlightPolicy,
     TypeConversionPolicy, TypeResourceContext, TypeResourcePolicy, WEAPON_USER_AIRCRAFT,
     WEAPON_USER_BUILDING, WEAPON_USER_INFANTRY, WEAPON_USER_UNIT, WeaponResourceContext,
-    WeaponResourcePolicy, WeaponFiringResourceContext, WeaponFiringPolicy,
+    WeaponResourcePolicy, WeaponFiringResourceContext, WeaponFiringPolicy, WeaponTypeRef,
+    WeaponRegisteredType, WeaponRegistryView, WeaponReadValue, WeaponInstanceResourceContext,
+    WeaponInstanceResourcePolicy,
 };
 pub use startup::{
     CsfLanguageGate, EvaCatalogPolicy, IncludeSemantics, LongListReadersPolicy,
@@ -144,6 +146,7 @@ pub enum HookKind {
     // New variants append: saved ModuleManifest values retain old ordinals.
     WeaponFiringResource,
     ProjectileResource,
+    WeaponInstanceResource,
 }
 
 impl HookKind {
@@ -155,6 +158,7 @@ impl HookKind {
             Self::Tick => "tick",
             Self::WeaponResource => "weapon_resource",
             Self::WeaponFiringResource => "weapon_firing_resource",
+            Self::WeaponInstanceResource => "weapon_instance_resource",
             Self::ProjectileResource => "projectile_resource",
             Self::TypeResource => "type_resource",
             Self::MatchRules => "match_rules",
@@ -309,6 +313,7 @@ pub enum Context {
     ConfigureSuperRead(ConfigureSuperReadContext),
     ProjectileResource(ProjectileResourceContext),
     WeaponFiringResource(WeaponFiringResourceContext),
+    WeaponInstanceResource(WeaponInstanceResourceContext),
 }
 
 impl Context {
@@ -320,6 +325,7 @@ impl Context {
             Self::Tick(_) => HookKind::Tick,
             Self::WeaponResource(_) => HookKind::WeaponResource,
             Self::WeaponFiringResource(_) => HookKind::WeaponFiringResource,
+            Self::WeaponInstanceResource(_) => HookKind::WeaponInstanceResource,
             Self::ProjectileResource(_) => HookKind::ProjectileResource,
             Self::TypeResource(_) => HookKind::TypeResource,
             Self::MatchRules(_) => HookKind::MatchRules,
@@ -431,6 +437,8 @@ pub struct Plan {
     pub super_reference_read: Option<SuperReferenceRead>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub projectile_resource: Option<ProjectileResourcePolicy>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weapon_instance_resource: Option<WeaponInstanceResourcePolicy>,
 }
 
 impl Plan {
@@ -442,6 +450,7 @@ impl Plan {
             damage: None,
             operations: Vec::new(),
             projection: None,
+            weapon_instance_resource: None,
             weapon_resource: None,
             weapon_firing_resource: None,
             type_resource: None,
@@ -581,10 +590,14 @@ impl Request {
             Context::TypeSoundResource(_)
                 | Context::SuperWeaponResource(_)
                 | Context::WeaponFiringResource(_)
+                | Context::WeaponInstanceResource(_)
                 | Context::ProjectileResource(_)
         ) && !self.state.is_empty()
         {
             return Err("immutable resource queries have no entity state".into());
+        }
+        if let Context::WeaponInstanceResource(context) = &self.context {
+            context.validate()?;
         }
         let user = match &self.context {
             Context::TypeResource(context) => Some(context.user),
@@ -613,6 +626,7 @@ impl Request {
             Context::Tick(c) => Some(c.entity.id),
             Context::WeaponResource(_) => None,
             Context::WeaponFiringResource(_) => None,
+            Context::WeaponInstanceResource(_) => None,
             Context::ProjectileResource(_) => None,
             Context::TypeResource(_) => None,
             Context::MatchRules(_) => None,
@@ -672,17 +686,20 @@ impl Plan {
             return Err("only damage may replace receiver damage".into());
         }
         if let Some(policy) = self.weapon_resource {
-            let supported_users = WEAPON_USER_UNIT | WEAPON_USER_INFANTRY | WEAPON_USER_BUILDING;
-            if request.context.kind() != HookKind::WeaponResource
-                || policy.users == 0
-                || policy.users & !supported_users != 0
-            {
+            if request.context.kind() != HookKind::WeaponResource {
                 return Err("invalid weapon resource policy or hook".into());
             }
+            policy.validate()?;
         }
         if let Some(policy) = self.weapon_firing_resource {
             let Context::WeaponFiringResource(context) = &request.context else {
                 return Err("only weapon firing resources may select firing policies".into());
+            };
+            policy.validate_for(context)?;
+        }
+        if let Some(policy) = self.weapon_instance_resource {
+            let Context::WeaponInstanceResource(context) = &request.context else {
+                return Err("only weapon_instance_resource may define instance policies".into());
             };
             policy.validate_for(context)?;
         }
@@ -717,6 +734,7 @@ impl Plan {
             request.context.kind(),
             HookKind::WeaponResource
                 | HookKind::WeaponFiringResource
+                | HookKind::WeaponInstanceResource
                 | HookKind::ProjectileResource
                 | HookKind::TypeResource
                 | HookKind::MatchRules
