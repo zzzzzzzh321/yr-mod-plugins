@@ -206,6 +206,13 @@ fn historical_range_omission_survives_configure_until_real_boundary() {
     let frozen = configure(&physical, 1, true);
     assert_eq!(range(&frozen, "Gun"), None);
     assert_eq!(fuel(&frozen), None);
+    assert_eq!(
+        frozen_query(&frozen, Context::MatchRules(MatchRulesContext {}))
+            .match_rules
+            .unwrap()
+            .shrapnel_weapon_assignment,
+        None
+    );
     assert!(
         serde_json::from_slice::<serde_json::Value>(&frozen)
             .unwrap()
@@ -241,6 +248,13 @@ fn historical_range_omission_survives_configure_until_real_boundary() {
         let fresh = reset.config.unwrap();
         assert_eq!(range(&fresh, "Gun"), Some(100_000));
         assert_eq!(fuel(&fresh), Some(true));
+        assert_eq!(
+            frozen_query(&fresh, Context::MatchRules(MatchRulesContext {}))
+                .match_rules
+                .unwrap()
+                .shrapnel_weapon_assignment,
+            Some(true)
+        );
     }
     let malformed = serde_json::to_vec(&Configuration {
         projectile_range: Some(projectile_range::Configuration::default()),
@@ -257,5 +271,20 @@ fn historical_range_omission_survives_configure_until_real_boundary() {
         evaluate(&request, &FrozenHost)
             .unwrap_err()
             .contains("requires the firing domain")
+    );
+    let malformed = serde_json::to_vec(&Configuration {
+        firing: Some(firing::Configuration::default()),
+        shrapnel_weapon_assignment: Some(true),
+        ..Default::default()
+    })
+    .unwrap();
+    let request = Request {
+        config: malformed,
+        ..request
+    };
+    assert!(
+        evaluate(&request, &FrozenHost)
+            .unwrap_err()
+            .contains("shrapnel weapon assignment requires the projectile range domain")
     );
 }

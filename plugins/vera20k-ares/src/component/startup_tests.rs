@@ -25,10 +25,10 @@ fn query(context: Query) -> Plan {
 #[test]
 fn startup_source_and_audio_recipes_are_ordered_installation_declarations() {
     assert!(manifest().hooks.contains(&HookKind::StartupResources));
-    // Weapon instance ownership is an independent optional frozen cohort.
+    // Fragment Weapon assignment is an independent optional frozen cohort.
     assert_eq!(
         (manifest().state_version, manifest().config_version),
-        (1, 23)
+        (1, 24)
     );
     assert_eq!(
         query(Query::SourceComposition).startup_resources,
@@ -141,13 +141,13 @@ fn startup_capabilities_are_pure_installation_declarations_without_feature_confi
         assert!(manifest().hooks.contains(&request.context.kind()));
     }
     let manifest = manifest();
-    assert_eq!(manifest.version, "0.34.0");
+    assert_eq!(manifest.version, "0.35.0");
     assert_eq!(
         (
             manifest.api_version,
             manifest.config_version,
             manifest.state_version
         ),
-        (1, 23, 1)
+        (1, 24, 1)
     );
 }

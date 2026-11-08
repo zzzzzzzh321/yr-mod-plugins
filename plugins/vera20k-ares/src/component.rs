@@ -146,6 +146,9 @@ pub(crate) struct Configuration {
     // Scatter ownership is independent of Airburst and all weapon feature flags.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     ballistic_scatter: Option<ballistic_scatter::Configuration>,
+    // An older frozen cohort keeps its original fragment constructor semantics.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    shrapnel_weapon_assignment: Option<bool>,
 }
 
 impl Configuration {
@@ -166,6 +169,9 @@ impl Configuration {
         }
         if self.airburst.is_some() && self.projectile_range.is_none() {
             return Err("airburst configuration requires the projectile range domain".into());
+        }
+        if self.shrapnel_weapon_assignment == Some(true) && self.projectile_range.is_none() {
+            return Err("shrapnel weapon assignment requires the projectile range domain".into());
         }
         Ok(())
     }
@@ -233,9 +239,9 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.34.0".into(),
+        version: "0.35.0".into(),
         state_version: 1,
-        config_version: 23,
+        config_version: 24,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -281,6 +287,7 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
             projectile_range: Some(projectile_range::Configuration::default()),
             airburst: Some(airburst::Configuration::default()),
             ballistic_scatter: Some(ballistic_scatter::Configuration::default()),
+            shrapnel_weapon_assignment: Some(true),
             weapon_instances: Some(vera_mod_api::WeaponRegistryView::default()),
             ..Configuration::default()
         })
@@ -431,6 +438,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             projectile_range: Some(projectile_range::Configuration::default()),
             airburst: Some(airburst::Configuration::default()),
             ballistic_scatter: Some(ballistic_scatter::Configuration::default()),
+            shrapnel_weapon_assignment: Some(true),
             weapon_instances: Some(vera_mod_api::WeaponRegistryView::default()),
             ..Configuration::default()
         };
@@ -642,6 +650,9 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
                     vera_mod_api::AirburstTailPolicy::UnsupportedReplacement
                 }),
                 projectile_fuel: config.projectile_range.as_ref().map(|_| true),
+                // BulletClass_Shrapnel_WeaponType1/2 (Ares1001ABF0)
+                // installs the actual Weapon without a CreateBullet budget copy.
+                shrapnel_weapon_assignment: config.shrapnel_weapon_assignment,
             });
             Ok(plan)
         }

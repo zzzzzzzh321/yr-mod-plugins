@@ -1,5 +1,7 @@
 # VERA20K 插件开发工程
 
+0.35／配置24／状态1新增可选 `MatchRulesPolicy.shrapnel_weapon_assignment`。新对局及真实重建边界默认声明启用；历史非空配置缺字段时保持原行为。`ShrapnelWeapon` 保留实际 Weapon 数组引用，安装引用后的碎片弹通过共享 Fire 读取该实例的 Range，并在引爆时读取 RadLevel。其裸构造航程仍为 INT_MAX，不复制 Weapon 的 ProjectileRange；这与 Airburst 工厂不同。字段为资源接纳时的静态声明，需配套宿主，不新增逐帧Wasm调用。验证范围包括实际组件开火、碎片飞行、保存恢复和伤害接收，完整Ares兼容仍在推进。
+
 本目录是后续外置功能插件的主要维护位置，与 `../engine` 相互独立。当前插件发布文件为 `vera20k-ares.wasm`，已有护盾、过载及 Ares 弹药、装填、低弹量选武器和手动操作限制示例。
 
 从组件 0.7.0 起，新对局安装组件后，`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl` 默认启用，已有 Ares 标签可以直接使用；可在 `[VeraFeatures]` 中将对应项设为 `no` 作对照。各标签自身的默认值不变，例如四个手动操作限制仍默认 `no`。Phobos 护盾与自定义过载仍需显式设置 `Shield=yes`、`Overload=yes`，且过载依赖护盾。默认启用只覆盖已外置范围，不表示完整 Ares 兼容。

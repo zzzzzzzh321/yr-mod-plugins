@@ -54,6 +54,11 @@ pub struct MatchRulesPolicy {
     /// Missing/false keeps retail behavior, independently of proximity fuses.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub projectile_fuel: Option<bool>,
+    /// Installs the actual fragment Weapon on Shrapnel children before Fire.
+    /// The shared bare constructor budget is retained; this does not select a
+    /// weapon-aware factory or copy a Weapon's projectile range override.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shrapnel_weapon_assignment: Option<bool>,
 }
 
 /// The replacement fan is deliberately unavailable until its complete geometry
@@ -129,6 +134,7 @@ mod tests {
         assert_eq!(policy.warhead_house_filter, None);
         assert_eq!(policy.airburst_tail, None);
         assert_eq!(policy.projectile_fuel, None);
+        assert_eq!(policy.shrapnel_weapon_assignment, None);
         assert_eq!(serde_json::to_string(&policy).unwrap(), old);
         policy.script_type_conversion = Some(false);
         policy.registered_side_ui = Some(false);
@@ -137,6 +143,7 @@ mod tests {
         policy.warhead_house_filter = Some(false);
         policy.airburst_tail = Some(AirburstTailPolicy::RetailFixedNine);
         policy.projectile_fuel = Some(false);
+        policy.shrapnel_weapon_assignment = Some(false);
         let bytes = serde_json::to_vec(&policy).unwrap();
         assert_eq!(
             serde_json::from_slice::<MatchRulesPolicy>(&bytes).unwrap(),
