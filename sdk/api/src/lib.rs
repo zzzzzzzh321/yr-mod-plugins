@@ -79,7 +79,7 @@ pub use resource::{
     WeaponInstanceResourcePolicy,
 };
 pub use startup::{
-    CsfLanguageGate, EvaCatalogPolicy, IncludeSemantics, LongListReadersPolicy,
+    CsfLanguageGate, EvaCatalogPolicy, IncludeSemantics, LongListReadersPolicy, MasterTypeListsPolicy,
     MAX_STARTUP_RESOURCES, StartupAudioCatalog, StartupAudioPair, StartupCsfCandidate,
     StartupCsfComposition, SpawnIdentityPolicy, StartupResourceContext, StartupResourcePolicy,
 };
@@ -147,6 +147,7 @@ pub enum HookKind {
     WeaponFiringResource,
     ProjectileResource,
     WeaponInstanceResource,
+    MasterTypeLists,
 }
 
 impl HookKind {
@@ -172,6 +173,7 @@ impl HookKind {
             Self::StartupResources => "startup_resources",
             Self::EvaCatalog => "eva_catalog",
             Self::LongListReaders => "long_list_readers",
+            Self::MasterTypeLists => "master_type_lists",
             Self::ConfigureCountryRead => "configure_country_read",
             Self::FactionResource => "faction_resource",
             Self::ConfigureFactionPass => "configure_faction_pass",
@@ -314,6 +316,9 @@ pub enum Context {
     ProjectileResource(ProjectileResourceContext),
     WeaponFiringResource(WeaponFiringResourceContext),
     WeaponInstanceResource(WeaponInstanceResourceContext),
+    /// Pure installed declaration queried before physical Rules type loading.
+    /// The host retains the master-list readers and registry lifecycle.
+    MasterTypeLists,
 }
 
 impl Context {
@@ -339,6 +344,7 @@ impl Context {
             Self::StartupResources(_) => HookKind::StartupResources,
             Self::EvaCatalog => HookKind::EvaCatalog,
             Self::LongListReaders => HookKind::LongListReaders,
+            Self::MasterTypeLists => HookKind::MasterTypeLists,
             Self::ConfigureCountryRead => HookKind::ConfigureCountryRead,
             Self::FactionResource(_) => HookKind::FactionResource,
             Self::ConfigureFactionPass => HookKind::ConfigureFactionPass,
@@ -439,6 +445,9 @@ pub struct Plan {
     pub projectile_resource: Option<ProjectileResourcePolicy>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weapon_instance_resource: Option<WeaponInstanceResourcePolicy>,
+    /// Optional pure declaration; absent in older components.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub master_type_lists: Option<MasterTypeListsPolicy>,
 }
 
 impl Plan {
@@ -475,6 +484,7 @@ impl Plan {
             sound_sample_admission: None,
             super_reference_read: None,
             projectile_resource: None,
+            master_type_lists: None,
         }
     }
 }
@@ -557,6 +567,7 @@ impl Request {
             HookKind::StartupResources
                 | HookKind::EvaCatalog
                 | HookKind::LongListReaders
+                | HookKind::MasterTypeLists
                 | HookKind::SpawnIdentity
                 | HookKind::PrismSupportDefaults
                 | HookKind::SoundSampleAdmission
@@ -640,6 +651,7 @@ impl Request {
             | Context::StartupResources(_)
             | Context::EvaCatalog
             | Context::LongListReaders
+            | Context::MasterTypeLists
             | Context::ConfigureCountryRead
             | Context::FactionResource(_)
             | Context::ConfigureFactionPass
@@ -747,6 +759,7 @@ impl Plan {
                 | HookKind::StartupResources
                 | HookKind::EvaCatalog
                 | HookKind::LongListReaders
+                | HookKind::MasterTypeLists
                 | HookKind::ConfigureCountryRead
                 | HookKind::FactionResource
                 | HookKind::ConfigureFactionPass
@@ -807,6 +820,9 @@ impl Plan {
         if self.long_list_readers.is_some() && request.context.kind() != HookKind::LongListReaders {
             return Err("only long_list_readers may select the early list readers".into());
         }
+        if self.master_type_lists.is_some() && request.context.kind() != HookKind::MasterTypeLists {
+            return Err("only master_type_lists may select master-list readers".into());
+        }
         if self.country_read.is_some() && request.context.kind() != HookKind::ConfigureCountryRead {
             return Err("only configure_country_read may select the pre-body reader".into());
         }
@@ -857,7 +873,12 @@ impl Plan {
             let Context::ConfigureSuperRead(context) = &request.context else {
                 return Err("only configure_super_read may request a native reference read".into());
             };
-            if action == SuperReferenceRead::WarheadFromCurrentSection && !context.body_read {
+            if matches!(
+                action,
+                SuperReferenceRead::WarheadFromCurrentSection
+                    | SuperReferenceRead::NuclearFromCurrentSection { .. }
+            ) && !context.body_read
+            {
                 return Err("an absent SuperWeapon body cannot resolve a reference".into());
             }
         }
@@ -949,6 +970,67 @@ mod tests {
         );
         plan.state.push(1);
         assert!(plan.validate_for(&request).is_err());
+        request.config.push(1);
+        assert!(request.validate().is_err());
+
+        request.context = Context::MasterTypeLists;
+        request.config.clear();
+        request.validate().unwrap();
+        assert_eq!(request.entity_id(), None);
+        assert_eq!(
+            serde_json::to_value(&request.context).unwrap(),
+            serde_json::json!({"kind": "master_type_lists"})
+        );
+        // Existing four-hook response bytes still omit the new declaration.
+        let legacy = serde_json::json!({
+            "api_version": API_VERSION, "config": null, "state": [],
+            "damage": null, "operations": [], "projection": null
+        });
+        let absent: Plan = serde_json::from_value(legacy.clone()).unwrap();
+        assert_eq!(absent.master_type_lists, None);
+        assert_eq!(serde_json::to_value(absent).unwrap(), legacy);
+        plan = Plan::unchanged(&request);
+        plan.master_type_lists = Some(MasterTypeListsPolicy { weapon_types: true });
+        plan.validate_for(&request).unwrap();
+        let mut wrong = request.clone();
+        wrong.context = Context::LongListReaders;
+        assert!(plan.validate_for(&wrong).is_err());
+        for invalid in [
+            Plan {
+                config: Some(vec![1]),
+                ..plan.clone()
+            },
+            Plan {
+                state: vec![1],
+                ..plan.clone()
+            },
+            Plan {
+                damage: Some(1),
+                ..plan.clone()
+            },
+            Plan {
+                operations: vec![Operation::AdjustHealth {
+                    entity: 1,
+                    delta: 1,
+                }],
+                ..plan.clone()
+            },
+            Plan {
+                projection: Some(Projection::default()),
+                ..plan.clone()
+            },
+        ] {
+            assert!(invalid.validate_for(&request).is_err());
+        }
+        assert!(
+            serde_json::from_value::<MasterTypeListsPolicy>(
+                serde_json::json!({"weapon_types": true, "families": ["weapons"]})
+            )
+            .is_err()
+        );
+        request.state.push(1);
+        assert!(request.validate().is_err());
+        request.state.clear();
         request.config.push(1);
         assert!(request.validate().is_err());
 

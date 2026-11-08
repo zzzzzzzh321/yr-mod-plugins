@@ -25,10 +25,10 @@ fn query(context: Query) -> Plan {
 #[test]
 fn startup_source_and_audio_recipes_are_ordered_installation_declarations() {
     assert!(manifest().hooks.contains(&HookKind::StartupResources));
-    // Fragment Weapon assignment is an independent optional frozen cohort.
+    // Nuclear's retained handler is an independent optional frozen cohort.
     assert_eq!(
         (manifest().state_version, manifest().config_version),
-        (1, 24)
+        (1, 25)
     );
     assert_eq!(
         query(Query::SourceComposition).startup_resources,
@@ -104,6 +104,7 @@ fn startup_capabilities_are_pure_installation_declarations_without_feature_confi
         Context::SpawnIdentity,
         Context::PrismSupportDefaults,
         Context::SoundSampleAdmission,
+        Context::MasterTypeLists,
     ] {
         let request = Request {
             api_version: API_VERSION,
@@ -135,19 +136,23 @@ fn startup_capabilities_are_pure_installation_declarations_without_feature_confi
             ),
             Context::PrismSupportDefaults => assert_eq!(plan.prism_support_defaults, Some(true)),
             Context::SoundSampleAdmission => assert_eq!(plan.sound_sample_admission, Some(true)),
+            Context::MasterTypeLists => assert_eq!(
+                plan.master_type_lists,
+                Some(vera_mod_api::MasterTypeListsPolicy { weapon_types: true }),
+            ),
             _ => unreachable!(),
         }
         assert!(plan.config.is_none() && plan.state.is_empty());
         assert!(manifest().hooks.contains(&request.context.kind()));
     }
     let manifest = manifest();
-    assert_eq!(manifest.version, "0.35.0");
+    assert_eq!(manifest.version, "0.36.0");
     assert_eq!(
         (
             manifest.api_version,
             manifest.config_version,
             manifest.state_version
         ),
-        (1, 24, 1)
+        (1, 25, 1)
     );
 }

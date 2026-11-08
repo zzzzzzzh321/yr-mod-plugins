@@ -80,9 +80,15 @@ impl ConfigureSuperReadContext {
 pub enum SuperReferenceRead {
     Retain,
     /// Execute the one existing SW.Warhead reader on the current physical
-    /// section. Its missing/empty/null and FindOrAllocate semantics remain
+    /// section. Its missing/empty/null and existing-only lookup semantics remain
     /// host-owned; this is not a direct assignment of an arbitrary name.
     WarheadFromCurrentSection,
+    /// Select the fixed Nuclear reference reader at this physical visit.
+    /// Initialization creates the native default payload before its optional
+    /// lookup-only override; neither names nor destination ordinals are supplied.
+    NuclearFromCurrentSection {
+        initialize: bool,
+    },
 }
 
 /// One immutable batch after configuration. No per-frame plugin calls or
@@ -175,6 +181,16 @@ pub enum SuperWeaponPayloadPolicy {
         action: String,
         activation_sound: crate::NullableResourceName,
     },
+    /// Immutable Nuclear handler settings. The host binds retained payload and
+    /// warhead slots from the same original physical reader, never final names.
+    Nuclear {
+        /// Negative values retain the selected payload Weapon's damage.
+        damage: i32,
+        silo_launch: bool,
+        take_off: crate::NullableResourceName,
+        psi_warning: crate::NullableResourceName,
+        activation_sound: crate::NullableResourceName,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -251,6 +267,19 @@ impl SuperWeaponResourcePolicy {
             }
             match &definition.payload {
                 SuperWeaponPayloadPolicy::Retail => {}
+                SuperWeaponPayloadPolicy::Nuclear {
+                    take_off,
+                    psi_warning,
+                    activation_sound,
+                    ..
+                } => {
+                    if !valid_reference(take_off, None, false)
+                        || !valid_reference(psi_warning, None, false)
+                        || !valid_reference(activation_sound, self.sound_source_hash, true)
+                    {
+                        return Err("invalid Nuclear resource declaration".into());
+                    }
+                }
                 SuperWeaponPayloadPolicy::GenericWarhead { targeting, .. } => {
                     if targeting.manual_house & !7 != 0 || targeting.automatic_house & !7 != 0 {
                         return Err("invalid SuperWeapon house mask".into());

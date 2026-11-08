@@ -239,9 +239,9 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.35.0".into(),
+        version: "0.36.0".into(),
         state_version: 1,
-        config_version: 24,
+        config_version: 25,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -274,6 +274,7 @@ pub fn manifest() -> ModuleManifest {
             HookKind::TypeSoundResource,
             HookKind::ProjectileResource,
             HookKind::WeaponInstanceResource,
+            HookKind::MasterTypeLists,
         ],
     }
 }
@@ -282,7 +283,7 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
     if bytes.is_empty() {
         Ok(Configuration {
             features: Features::for_new_match(),
-            superweapons: Some(superweapons::Configuration::default()),
+            superweapons: Some(superweapons::Configuration::for_new_match()),
             firing: Some(firing::Configuration::default()),
             projectile_range: Some(projectile_range::Configuration::default()),
             airburst: Some(airburst::Configuration::default()),
@@ -298,6 +299,14 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
 
 pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, String> {
     request.validate()?;
+    if let Context::MasterTypeLists = &request.context {
+        // Ares RulesClass::BeforeTypeData679A15 registers WeaponTypes with
+        // the factory before any SuperWeapon or Weapon body is read. This
+        // installed declaration cannot depend on later match configuration.
+        let mut plan = Plan::unchanged(request);
+        plan.master_type_lists = Some(vera_mod_api::MasterTypeListsPolicy { weapon_types: true });
+        return Ok(plan);
+    }
     if let Context::SoundSampleAdmission = &request.context {
         // Fixed SOUNDMD sample admission is selected before configuration.
         // The host keeps the actual source identity and sample catalog.
@@ -433,7 +442,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             promotion_sounds,
             // Native SWTypeExt state is recreated at these real boundaries.
             // Only subsequent ConfigureSuperRead visits initialize each Type.
-            superweapons: Some(superweapons::Configuration::default()),
+            superweapons: Some(superweapons::Configuration::for_new_match()),
             firing: Some(firing::Configuration::default()),
             projectile_range: Some(projectile_range::Configuration::default()),
             airburst: Some(airburst::Configuration::default()),

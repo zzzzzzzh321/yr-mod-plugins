@@ -249,6 +249,7 @@ pub(crate) fn evaluate<H: Host>(
         | Context::StartupResources(_)
         | Context::EvaCatalog
         | Context::LongListReaders
+        | Context::MasterTypeLists
         | Context::SpawnIdentity
         | Context::PrismSupportDefaults
         | Context::SoundSampleAdmission

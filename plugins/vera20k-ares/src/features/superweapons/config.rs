@@ -16,7 +16,7 @@ pub(crate) enum Kind {
 impl Kind {
     /// ReadINI6CEC2D..6CEC7E's recognized Type history is separate from the
     /// last raw text; the two existing custom kinds extend those twelve slots.
-    fn parse(name: &str) -> Option<Self> {
+    pub(super) fn parse(name: &str) -> Option<Self> {
         const RETAIL: [&str; 12] = [
             "MultiMissile",
             "IronCurtain",
@@ -155,6 +155,10 @@ pub(crate) struct TypeState {
     /// The old final sound binder sees earlier physical values even if the
     /// delivery descriptor is first created by a later Type read.
     pub(crate) activation_sound: NullableResourceName,
+    /// Ext+4D4 remembers the stock handler mapped by the first reached
+    /// Initialize. Later recognized stock Type values do not remap it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) nuclear: Option<super::nuclear::Nuclear>,
 }
 
 impl TypeState {
@@ -176,7 +180,12 @@ impl TypeState {
             generic: Generic::default(),
             delivery: None,
             activation_sound: NullableResourceName::Inherit,
+            nuclear: None,
         }
+    }
+
+    pub(super) fn selects_nuclear(&self) -> bool {
+        matches!(self.kind, Kind::Retail(_)) && self.nuclear.is_some()
     }
 
     pub(super) fn initialize_eva_default<H: Host>(

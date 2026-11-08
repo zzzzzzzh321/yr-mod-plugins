@@ -1,10 +1,11 @@
 //! Retained SWTypeExt configuration. The native registry owns reference
 //! allocation; the engine keeps all live Super/timer/wallet state.
 mod config;
+mod nuclear;
 mod targeting;
 
-pub(crate) use config::{DeliveryOwner, Kind, TypeState};
 use crate::support::{ConfigView, Host};
+pub(crate) use config::{DeliveryOwner, Kind, TypeState};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use vera_mod_api::{
@@ -19,9 +20,20 @@ pub(crate) struct Configuration {
     pub(crate) providers: BTreeMap<u32, Vec<u32>>,
     pub(crate) sound_source_hash: Option<u64>,
     pub(crate) eva_source_hash: Option<u64>,
+    /// Independent of .35's custom_payloads flag. Historical nonempty
+    /// configuration does not acquire the Nuclear handler on later reads.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) nuclear: Option<bool>,
 }
 
 impl Configuration {
+    pub(crate) fn for_new_match() -> Self {
+        Self {
+            nuclear: Some(true),
+            ..Self::default()
+        }
+    }
+
     fn retain_sources<H: Host>(&mut self, view: &ConfigView<'_, H>) -> Result<(), String> {
         let source = view.required_sound_source_hash()?;
         if self
@@ -75,8 +87,13 @@ impl Configuration {
             return Err("Super Type read differs from its physical identity".into());
         }
         self.retain_sources(view)?;
+        let nuclear_enabled = self.nuclear == Some(true);
         let state = self.register(context.ordinal, &context.stored_id)?;
         state.initialize_eva_default(view)?;
+        let initialize_nuclear = nuclear_enabled
+            && !state.initialized
+            && context.body_read
+            && context.effective_type.as_deref().and_then(Kind::parse) == Some(Kind::Retail(0));
         //10033284 ->10033347 consumes a first absent body with mode0.
         if !state.initialized {
             if context.body_read {
@@ -84,16 +101,31 @@ impl Configuration {
                     .effective_type
                     .as_deref()
                     .map_or(0, targeting::handler_initial_mode);
+                if initialize_nuclear {
+                    state.nuclear = Some(nuclear::Nuclear::initialize(
+                        context,
+                        section.as_deref().ok_or("missing initial Nuclear body")?,
+                        view,
+                    )?);
+                }
             }
             state.initialized = true;
         }
         if let Some(owner) = section {
             state.read(context, owner, view)?;
+            let selected = nuclear_enabled && state.selects_nuclear();
+            if let Some(nuclear) = &mut state.nuclear {
+                nuclear.read(context, owner, selected, view)?;
+            }
         }
-        // Reference allocation follows the latest retained Type text, not
-        // the recognized dispatch history (unknown text can retain a kind).
+        // Stock kinds dispatch through the first mapped handler, independent
+        // of the latest Type text. GenericWarhead keeps its older read gate.
         Ok(
-            if context.body_read
+            if context.body_read && nuclear_enabled && state.selects_nuclear() {
+                SuperReferenceRead::NuclearFromCurrentSection {
+                    initialize: initialize_nuclear,
+                }
+            } else if context.body_read
                 && context
                     .effective_type
                     .as_deref()
@@ -187,6 +219,11 @@ impl Configuration {
                         activation_sound: state.activation_sound.clone(),
                     }
                 }
+                Kind::Retail(_) if self.nuclear == Some(true) && state.selects_nuclear() => state
+                    .nuclear
+                    .as_ref()
+                    .ok_or("Nuclear dispatch lacks its reached descriptor")?
+                    .policy(state.activation_sound.clone()),
                 Kind::Retail(_) | Kind::NoEffect => api::SuperWeaponPayloadPolicy::Retail,
             };
             definitions.push(api::SuperWeaponDeclaration {

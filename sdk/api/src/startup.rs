@@ -37,6 +37,16 @@ pub enum LongListReadersPolicy {
     Extended2048,
 }
 
+/// Select the host's fixed master-list readers before each physical Rules pass.
+/// The host owns section names, parsing, registration and dispatch order; this
+/// declaration cannot add keys or inspect gameplay configuration or state.
+/// A missing declaration preserves the host's reader profile.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MasterTypeListsPolicy {
+    pub weapon_types: bool,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "stage", rename_all = "snake_case", deny_unknown_fields)]
 pub enum StartupResourceContext {

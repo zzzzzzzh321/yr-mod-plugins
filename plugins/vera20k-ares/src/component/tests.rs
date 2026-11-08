@@ -784,6 +784,264 @@ fn superweapon_configuration_consumes_absent_first_visit_and_queries_frozen_sour
     assert!(fresh.definitions.is_empty() && fresh.providers.is_empty());
 }
 
+/// Predecoded physical values. No registry/name parser is duplicated here;
+/// the production host owns those readers and their retention semantics.
+struct NuclearSourceHost {
+    read: u32,
+    type_name: Option<&'static str>,
+    initialize: bool,
+    changed: bool,
+}
+impl Host for NuclearSourceHost {
+    fn config(&self, section: &str, key: &str) -> Option<String> {
+        assert_eq!(section, "PHYSICAL");
+        (self.type_name.is_some()
+            && (key == "Type"
+                || (self.changed || self.read == 2)
+                    && matches!(key, "SW.Damage" | "Nuke.SiloLaunch" | "SW.ActivationSound")))
+        .then(|| "predecoded physical value".into())
+    }
+    fn config_read(
+        &self,
+        section: &str,
+        key: &str,
+        reader: &str,
+        current: &[u8],
+    ) -> Result<Vec<u8>, String> {
+        use vera_mod_api::{
+            NullableResourceName, SuperReadValue, SuperWeaponReadPoint, SuperWeaponReadSite,
+            SuperWeaponRegistryView,
+        };
+        if reader == "superweapon-registry-view" {
+            return serde_json::to_vec(&SuperWeaponRegistryView {
+                superweapons: vec!["NUCLEAR".into()],
+                reads: (0..=self.read)
+                    .map(|_| SuperWeaponReadPoint {
+                        site: SuperWeaponReadSite::Type {
+                            ordinal: 0,
+                            section: self.type_name.map(|_| "PHYSICAL".into()),
+                        },
+                    })
+                    .collect(),
+            })
+            .map_err(|e| e.to_string());
+        }
+        if let Some(reply) = empty_super_sources(section, key, reader, current) {
+            return reply;
+        }
+        assert!(self.type_name.is_some(), "absent bodies cannot read INI");
+        assert_eq!(section, "PHYSICAL", "stored ID is not the physical owner");
+        match reader {
+            "name:40" => {
+                assert_eq!(key, "Type");
+                serde_json::to_vec(&self.type_name).map_err(|e| e.to_string())
+            }
+            "ares-int" => {
+                assert_eq!(key, "SW.Damage");
+                Ok(if self.read == 2 {
+                    current.to_vec()
+                } else {
+                    b"37".to_vec()
+                })
+            }
+            "ares-bool" => {
+                assert_eq!(key, "Nuke.SiloLaunch");
+                Ok(if self.read == 2 {
+                    current.to_vec()
+                } else {
+                    b"false".to_vec()
+                })
+            }
+            "sound-reference" => {
+                assert_eq!(key, "SW.ActivationSound");
+                if self.read == 2 {
+                    // Present unknown sound retains the nullable reference.
+                    Ok(current.to_vec())
+                } else {
+                    serde_json::to_vec(&NullableResourceName::Clear).map_err(|e| e.to_string())
+                }
+            }
+            "comma-mask:2048" => Ok(b"null".to_vec()),
+            _ => {
+                let input: SuperReadValue<serde_json::Value> =
+                    serde_json::from_slice(current).map_err(|e| e.to_string())?;
+                assert_eq!(input.read, self.read);
+                match reader {
+                    "super-nuclear-psi-default" => {
+                        assert!(self.initialize, "initial defaults cannot be replayed");
+                        assert_eq!(key, "");
+                        serde_json::to_vec(&NullableResourceName::Named("PsiWarn".into()))
+                            .map_err(|e| e.to_string())
+                    }
+                    "super-animation-reference" => {
+                        let value = match key {
+                            "Nuke.TakeOff" if self.changed => {
+                                serde_json::to_value(NullableResourceName::Named("TAKE".into()))
+                                    .unwrap()
+                            }
+                            "Nuke.PsiWarning" if self.changed => {
+                                serde_json::to_value(NullableResourceName::Clear).unwrap()
+                            }
+                            "Nuke.TakeOff" | "Nuke.PsiWarning" | "SW.Animation" => input.current,
+                            _ => panic!("unexpected animation key {key}"),
+                        };
+                        serde_json::to_vec(&value).map_err(|e| e.to_string())
+                    }
+                    "super-country-mask" | "super-building-list" => Ok(b"null".to_vec()),
+                    "super-effective:ares-int" | "super-effective:bool" | "super-eva-reference" => {
+                        assert_ne!(key, "SW.Damage", "Nuclear scalars need the physical pass");
+                        serde_json::to_vec(&input.current).map_err(|e| e.to_string())
+                    }
+                    _ => Err(format!("unexpected Nuclear fixture reader {reader}")),
+                }
+            }
+        }
+    }
+    fn registry(&self, _: &str) -> Vec<String> {
+        panic!("configuration cannot create another registry")
+    }
+    fn damage_kernel(&self, _: &DamageKernelInput) -> Result<i32, String> {
+        panic!("configuration cannot inflict damage")
+    }
+}
+
+fn nuclear_visit(
+    config: Vec<u8>,
+    host: NuclearSourceHost,
+) -> (Vec<u8>, vera_mod_api::SuperReferenceRead) {
+    let request = Request {
+        api_version: API_VERSION,
+        context: Context::ConfigureSuperRead(vera_mod_api::ConfigureSuperReadContext {
+            read: host.read,
+            ordinal: 0,
+            stored_id: "NUCLEAR".into(),
+            body_read: host.type_name.is_some(),
+            effective_type: host.type_name.map(str::to_owned),
+        }),
+        config,
+        state: vec![],
+    };
+    let plan = evaluate(&request, &host).unwrap();
+    plan.validate_for(&request).unwrap();
+    (plan.config.unwrap(), plan.super_reference_read.unwrap())
+}
+
+#[test]
+fn nuclear_configuration_retains_mapped_handler_and_physical_settings() {
+    use vera_mod_api::{NullableResourceName, SuperReferenceRead, SuperWeaponPayloadPolicy};
+    let payload = |config: &[u8]| {
+        frozen_query(
+            config,
+            Context::SuperWeaponResource(vera_mod_api::SuperWeaponResourceContext {}),
+        )
+        .superweapon_resource
+        .unwrap()
+        .definitions
+        .remove(0)
+        .payload
+    };
+    let (config, action) = nuclear_visit(
+        vec![],
+        NuclearSourceHost {
+            read: 0,
+            type_name: Some("MultiMissile"),
+            initialize: true,
+            changed: false,
+        },
+    );
+    assert_eq!(
+        action,
+        SuperReferenceRead::NuclearFromCurrentSection { initialize: true }
+    );
+    assert_eq!(
+        payload(&config),
+        SuperWeaponPayloadPolicy::Nuclear {
+            damage: -1,
+            silo_launch: true,
+            take_off: NullableResourceName::Inherit,
+            psi_warning: NullableResourceName::Named("PsiWarn".into()),
+            activation_sound: NullableResourceName::Inherit,
+        }
+    );
+    let (config, action) = nuclear_visit(
+        config,
+        NuclearSourceHost {
+            read: 1,
+            type_name: Some("UnknownType"),
+            initialize: false,
+            changed: true,
+        },
+    );
+    assert_eq!(
+        action,
+        SuperReferenceRead::NuclearFromCurrentSection { initialize: false }
+    );
+    let expected = SuperWeaponPayloadPolicy::Nuclear {
+        damage: 37,
+        silo_launch: false,
+        take_off: NullableResourceName::Named("TAKE".into()),
+        psi_warning: NullableResourceName::Clear,
+        activation_sound: NullableResourceName::Clear,
+    };
+    assert_eq!(payload(&config), expected);
+    // A later recognized stock kind updates native history but retains the
+    // first stock handler. The host's predecoded invalid scalar/unknown
+    // reference replies retain that handler's values on physical pass 2.
+    let (config, action) = nuclear_visit(
+        config,
+        NuclearSourceHost {
+            read: 2,
+            type_name: Some("IronCurtain"),
+            initialize: false,
+            changed: false,
+        },
+    );
+    assert_eq!(
+        action,
+        SuperReferenceRead::NuclearFromCurrentSection { initialize: false }
+    );
+    assert_eq!(payload(&config), expected);
+}
+
+#[test]
+fn nuclear_configuration_does_not_initialize_after_absence_or_in_old_cohort() {
+    use vera_mod_api::{SuperReferenceRead, SuperWeaponPayloadPolicy};
+    let (absent, action) = nuclear_visit(
+        vec![],
+        NuclearSourceHost {
+            read: 0,
+            type_name: None,
+            initialize: false,
+            changed: false,
+        },
+    );
+    assert_eq!(action, SuperReferenceRead::Retain);
+    let mut old = Configuration::default();
+    old.superweapons = Some(superweapons::Configuration::default());
+    for config in [absent, serde_json::to_vec(&old).unwrap()] {
+        let (config, action) = nuclear_visit(
+            config,
+            NuclearSourceHost {
+                read: 1,
+                type_name: Some("MultiMissile"),
+                initialize: false,
+                changed: false,
+            },
+        );
+        assert_eq!(action, SuperReferenceRead::Retain);
+        let policy = frozen_query(
+            &config,
+            Context::SuperWeaponResource(vera_mod_api::SuperWeaponResourceContext {}),
+        )
+        .superweapon_resource
+        .unwrap();
+        assert_eq!(
+            policy.definitions[0].payload,
+            SuperWeaponPayloadPolicy::Retail
+        );
+    }
+}
+
 #[test]
 fn keep_alive_configuration_freezes_unset_and_explicit_contributions() {
     // No VeraFeatures opt-in: a newly installed component owns the match rule.
