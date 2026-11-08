@@ -58,6 +58,11 @@ animation identities, coordinates, damage stages and the original AI estimate;
 new capability requires its matching host. Older guests keep their original
 request shape and old frozen configurations do not acquire the new domain.
 
+The paired 0.29 host has a new full-snapshot layout. The retained 0.28 guest
+loads and saves/resumes under the new host, while complete snapshots written
+by the retained older host require that original host/component pair. Entity
+state version 1 does not imply a stable full-engine snapshot schema.
+
 Version 0.28 moves the existing SuperWeapon extensions into
 `features/superweapons/`. `configure_super_read` runs at the original Rules
 visit, preserving first-visit initialization and SW.Warhead reference allocation;
