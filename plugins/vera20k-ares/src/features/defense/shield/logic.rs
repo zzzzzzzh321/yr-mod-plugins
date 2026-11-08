@@ -234,6 +234,7 @@ pub(crate) fn evaluate<H: Host>(
             return Err("configuration must use the configuration hook".into());
         }
         Context::WeaponResource(_)
+        | Context::WeaponFiringResource(_)
         | Context::TypeResource(_)
         | Context::MatchRules(_)
         | Context::ArmorResource(_)

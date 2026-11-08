@@ -78,17 +78,19 @@ dist/release-new/
 └── vera-mod.json
 ```
 
-声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.28.0开发分支还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
+声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.29.0开发候选还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
 
 如果设置了 `CARGO_TARGET_DIR`，原始 Wasm 的位置随之改变；打包命令中的输入路径也应使用该目标目录。源码修改和编译过程不会自动改变作品当前对局中的组件。
 
 ## SDK 与引擎版本
 
+0.29 开发候选新增可选 `weapon_firing_resource`，接入 Ares 多方向开火动画与 `ApplyDamage`，实现位于 `features/weapons/firing.rs`。安装后无需额外启用开关：`Anim` 列表按最大的完整二次幂方向数选择，普通武器默认保留直接伤害，声波／喷火粒子武器默认关闭，`ApplyDamage` 可显式覆盖。配置使用已有 Ares nullable 布尔读取器保留物理层历史；查询只读冻结配置。已有 AI 伤害估值、动画引用、坐标、伤害缩放与构造仍由原引擎负责，`ApplyDamage` 不扩展到 AI 估值。当前为 config19／state1／API v1，需支持新 Hook 的配套引擎；旧组件不接收新请求，旧非空配置不自动补入新功能。
+
 0.28 已完成本阶段既有 Ares 子集的外置迁移，完整 Ares 兼容仍未完成。接口见[超武声明](../api/src/superweapon.rs)。
 
 0.28 将引擎已有的超武扩展接入 `features/superweapons/`。`configure_super_read` 在原规则读取时点处理首次访问和 `SW.Warhead` 引用；`superweapon_resource` 在配置结束后一次性提供挂载、使用条件、初始/虚拟充能、费用、通用弹头、单位投送及演出声明。作者直接使用既有 Ares INI 标签，无需额外启用标签。Host 共用原数值、列表和固定音频目录读取接口；计时、发射次数、钱包、两阶段选择和投送队列继续由原引擎所有者维护，Wasm 不逐帧改写这些状态。
 
-此候选的配置版本为18、实体状态版本为1，API v1 与 WIT 名称保持不变，但两个新增接口需要配套宿主。旧组件未声明时沿用宿主模式；显式默认声明选择原版行为。存档恢复使用存档中的精确组件与冻结配置，原始组件及配套引擎应与旧存档一起保留。范围限于引擎原有的超武子集；完整 charge-drain、新超武类型和更多 AI 选点方式仍未由本次迁移实现。
+0.28 候选的配置版本为18、实体状态版本为1，API v1 与 WIT 名称保持不变，但两个新增接口需要配套宿主。旧组件未声明时沿用宿主模式；显式默认声明选择原版行为。存档恢复使用存档中的精确组件与冻结配置，原始组件及配套引擎应与旧存档一起保留。范围限于引擎原有的超武子集；完整 charge-drain、新超武类型和更多 AI 选点方式仍未由本次迁移实现。
 
 0.27 新增纯启动声明 `sound_sample_admission`，在固定 SOUNDMD 目录首次读取前选择未索引样本的接纳方式。参考组件直接声明 true，合法散装 WAV 可沿原有样本选择与解码流程加载；无需额外 INI 开关。未声明沿用宿主模式，显式 false 在存在音频索引时要求样本已登记。声音目录、资源查找和解码器仍由宿主统一维护，资源重新接入继续使用原冻结目录。相同 INI 摘要不代表接纳模式相同，恢复仍依赖精确组件身份与固定资源配方。配置17／状态1／API v1／WIT不变，新声明需要配套宿主；未进行音频设备输出或跨平台实跑。
 
@@ -108,7 +110,7 @@ dist/release-new/
 
 0.19 的 `long_list_readers` 是独立的安装级纯声明，在任何冷 Rules 读取前执行。参考组件直接返回 `Extended2048`，仅扩展 House `Allies`、Techno `Prerequisite` 和 `PrerequisiteOverride`；不受 `AresProduction`／`AresFaction` 开关控制。其他组件可明确返回 `Retail128`，不声明则保留宿主原模式。General 六类前置保持128，物理 INI 行限制保持511字节；原解析器、注册表和外交模块继续负责实际结果。配置版本仍为15，状态版本仍为1；完整旧存档保留对应旧引擎与原组件。
 
-接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.28.0开发分支使用配置版本18、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，Ares 完整文档兼容尚未完成，也未替换保留交付。
+接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.29.0开发候选使用配置版本19、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，Ares 完整文档兼容尚未完成，也未替换保留交付。
 
 开发分支新增`match_rules`、`effect_resource`、`effects`、`armor_resource`、`production_resource`、`configure_boundary`和`emp_resource`可选能力，以及类型隐形许可等消息字段。宿主须提供物理Rules读取点的注册类型查询、效果实例事务、原数学/动画/隐形所有者和相应保存恢复接入；只认识原有回调的宿主无法运行这版组件。组件的护盾字节与宿主效果列表分别保存，效果列表只有一个所有者。宿主接收静态策略时建立派生缓存，每次效果更新只提交经校验的有序动作。护甲增量已通过关联回归及真实资源加载，Ares 完整文档兼容仍未完成。SDK快照的配套引擎来源提交见`sdk/source.json`。
 

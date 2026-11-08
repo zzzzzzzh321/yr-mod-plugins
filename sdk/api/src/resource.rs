@@ -8,6 +8,48 @@ pub struct WeaponResourceContext {
     pub weapon_name: String,
 }
 
+/// Immutable facts from the bound native weapon. Kept in a separate optional
+/// hook so older guests still receive their exact WeaponResource wire shape.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WeaponFiringResourceContext {
+    pub weapon_name: String,
+    pub animation_count: u32,
+    pub is_sonic: bool,
+    pub use_fire_particles: bool,
+}
+
+/// Stateless inputs for the existing shot-damage and muzzle-animation owners.
+/// The component chooses the number of facing bins; the host retains the
+/// animation references, firing coordinates, damage stages and shot lifecycle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct WeaponFiringPolicy {
+    pub apply_damage: bool,
+    /// Zero for an empty list, otherwise a power of two within that list.
+    /// 65,536 selects the full-word, unwrapped art-offset mode; the host
+    /// bounds-checks its resulting index rather than wrapping it to a bin.
+    pub muzzle_facings: u32,
+}
+
+impl WeaponFiringPolicy {
+    pub fn validate_for(self, context: &WeaponFiringResourceContext) -> Result<(), String> {
+        if context.animation_count == 0 {
+            if self.muzzle_facings != 0 {
+                return Err("empty muzzle animation list has no facing bins".into());
+            }
+        } else if !self.muzzle_facings.is_power_of_two()
+            || self.muzzle_facings > context.animation_count
+            || self.muzzle_facings > 65_536
+        {
+            return Err(
+                "muzzle facing bins exceed the bound animation list or direction word".into(),
+            );
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct TypeResourceContext {
@@ -162,6 +204,44 @@ impl TypeResourcePolicy {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn firing_queries_cannot_select_unbound_bins_or_mutate_entity_state() {
+        use crate::{API_VERSION, Context, Plan, Request};
+        let mut request = Request {
+            api_version: API_VERSION,
+            context: Context::WeaponFiringResource(WeaponFiringResourceContext {
+                weapon_name: "Cannon".into(),
+                animation_count: 17,
+                is_sonic: true,
+                use_fire_particles: false,
+            }),
+            config: vec![],
+            state: vec![],
+        };
+        request.validate().unwrap();
+        let mut plan = Plan::unchanged(&request);
+        assert!(
+            !serde_json::to_string(&plan)
+                .unwrap()
+                .contains("weapon_firing_resource")
+        );
+        plan.weapon_firing_resource = Some(WeaponFiringPolicy {
+            apply_damage: true,
+            muzzle_facings: 16,
+        });
+        plan.validate_for(&request).unwrap();
+        plan.state.push(1);
+        assert!(plan.validate_for(&request).is_err());
+        plan.state.clear();
+        plan.weapon_firing_resource.as_mut().unwrap().muzzle_facings = 32;
+        assert!(plan.validate_for(&request).is_err());
+        plan.weapon_firing_resource.as_mut().unwrap().muzzle_facings = 16;
+        request.context = Context::WeaponResource(WeaponResourceContext {
+            weapon_name: "Cannon".into(),
+        });
+        assert!(plan.validate_for(&request).is_err());
+    }
 
     #[test]
     fn old_type_policy_omits_input_and_new_input_round_trips() {

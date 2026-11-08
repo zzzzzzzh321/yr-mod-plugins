@@ -69,7 +69,7 @@ pub use resource::{
     DepletedWeaponPolicy, InputPolicy, ReloadPolicy, SpotlightAttachment, SpotlightPolicy,
     TypeConversionPolicy, TypeResourceContext, TypeResourcePolicy, WEAPON_USER_AIRCRAFT,
     WEAPON_USER_BUILDING, WEAPON_USER_INFANTRY, WEAPON_USER_UNIT, WeaponResourceContext,
-    WeaponResourcePolicy,
+    WeaponResourcePolicy, WeaponFiringResourceContext, WeaponFiringPolicy,
 };
 pub use startup::{
     CsfLanguageGate, EvaCatalogPolicy, IncludeSemantics, LongListReadersPolicy,
@@ -136,6 +136,8 @@ pub enum HookKind {
     SoundSampleAdmission,
     ConfigureSuperRead,
     SuperWeaponResource,
+    // New variants append: saved ModuleManifest values retain old ordinals.
+    WeaponFiringResource,
 }
 
 impl HookKind {
@@ -146,6 +148,7 @@ impl HookKind {
             Self::Damage => "damage",
             Self::Tick => "tick",
             Self::WeaponResource => "weapon_resource",
+            Self::WeaponFiringResource => "weapon_firing_resource",
             Self::TypeResource => "type_resource",
             Self::MatchRules => "match_rules",
             Self::EffectResource => "effect_resource",
@@ -297,6 +300,7 @@ pub enum Context {
     SoundSampleAdmission,
     /// One reached native SuperWeapon visit, before its reference allocation.
     ConfigureSuperRead(ConfigureSuperReadContext),
+    WeaponFiringResource(WeaponFiringResourceContext),
 }
 
 impl Context {
@@ -307,6 +311,7 @@ impl Context {
             Self::Damage(_) => HookKind::Damage,
             Self::Tick(_) => HookKind::Tick,
             Self::WeaponResource(_) => HookKind::WeaponResource,
+            Self::WeaponFiringResource(_) => HookKind::WeaponFiringResource,
             Self::TypeResource(_) => HookKind::TypeResource,
             Self::MatchRules(_) => HookKind::MatchRules,
             Self::EffectResource(_) => HookKind::EffectResource,
@@ -361,6 +366,9 @@ pub struct Plan {
     /// Additive SDK v1 hook; omitted on the wire for older four-hook guests.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub weapon_resource: Option<WeaponResourcePolicy>,
+    /// Optional immutable firing policy; absent in older components.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub weapon_firing_resource: Option<WeaponFiringPolicy>,
     /// Optional immutable type policy; older guests omit this field.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub type_resource: Option<TypeResourcePolicy>,
@@ -424,6 +432,7 @@ impl Plan {
             operations: Vec::new(),
             projection: None,
             weapon_resource: None,
+            weapon_firing_resource: None,
             type_resource: None,
             match_rules: None,
             effect_resource: None,
@@ -557,10 +566,12 @@ impl Request {
         }
         if matches!(
             self.context,
-            Context::TypeSoundResource(_) | Context::SuperWeaponResource(_)
+            Context::TypeSoundResource(_)
+                | Context::SuperWeaponResource(_)
+                | Context::WeaponFiringResource(_)
         ) && !self.state.is_empty()
         {
-            return Err("type sound resource queries have no entity state".into());
+            return Err("immutable resource queries have no entity state".into());
         }
         let user = match &self.context {
             Context::TypeResource(context) => Some(context.user),
@@ -588,6 +599,7 @@ impl Request {
             Context::Damage(c) => Some(c.entity.id),
             Context::Tick(c) => Some(c.entity.id),
             Context::WeaponResource(_) => None,
+            Context::WeaponFiringResource(_) => None,
             Context::TypeResource(_) => None,
             Context::MatchRules(_) => None,
             Context::EffectResource(_) => None,
@@ -654,6 +666,12 @@ impl Plan {
                 return Err("invalid weapon resource policy or hook".into());
             }
         }
+        if let Some(policy) = self.weapon_firing_resource {
+            let Context::WeaponFiringResource(context) = &request.context else {
+                return Err("only weapon firing resources may select firing policies".into());
+            };
+            policy.validate_for(context)?;
+        }
         if let Some(policy) = self.type_resource {
             let supported_users = WEAPON_USER_UNIT
                 | WEAPON_USER_INFANTRY
@@ -679,6 +697,7 @@ impl Plan {
         if matches!(
             request.context.kind(),
             HookKind::WeaponResource
+                | HookKind::WeaponFiringResource
                 | HookKind::TypeResource
                 | HookKind::MatchRules
                 | HookKind::EffectResource

@@ -11,7 +11,7 @@ use crate::{
         resources::{startup, loading_theme},
         superweapons,
         units::{attach_effect, cloak, emp, manual_control, spotlight, type_conversion},
-        weapons::{ammo_cost, empty_weapon, reload},
+        weapons::{ammo_cost, empty_weapon, firing, reload},
     },
     support::{ConfigView, Host},
 };
@@ -131,21 +131,25 @@ pub(crate) struct Configuration {
     // Historical nonempty configuration without this domain stays unowned.
     #[serde(default)]
     superweapons: Option<superweapons::Configuration>,
+    // Old nonempty frozen configuration does not acquire new firing rules.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    firing: Option<firing::Configuration>,
 }
 
 pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.28.0".into(),
+        version: "0.29.0".into(),
         state_version: 1,
-        config_version: 18,
+        config_version: 19,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
             HookKind::Damage,
             HookKind::Tick,
             HookKind::WeaponResource,
+            HookKind::WeaponFiringResource,
             HookKind::TypeResource,
             HookKind::MatchRules,
             HookKind::EffectResource,
@@ -178,6 +182,7 @@ fn decode_config(bytes: &[u8]) -> Result<Configuration, String> {
         Ok(Configuration {
             features: Features::for_new_match(),
             superweapons: Some(superweapons::Configuration::default()),
+            firing: Some(firing::Configuration::default()),
             ..Configuration::default()
         })
     } else {
@@ -320,6 +325,7 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             // Native SWTypeExt state is recreated at these real boundaries.
             // Only subsequent ConfigureSuperRead visits initialize each Type.
             superweapons: Some(superweapons::Configuration::default()),
+            firing: Some(firing::Configuration::default()),
             ..Configuration::default()
         };
         let mut plan = Plan::unchanged(request);
@@ -356,6 +362,9 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
         if context.final_pass {
             config.spotlight.finalize(context);
             config.features.validate()?;
+            if let Some(firing) = config.firing.as_mut() {
+                firing.configure(host)?;
+            }
             if config.features.ares_ammo {
                 config.ammunition.configure(host, &view);
             }
@@ -522,6 +531,12 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             });
             Ok(plan)
         }
+        Context::WeaponFiringResource(context) => {
+            let mut plan = Plan::unchanged(request);
+            plan.weapon_firing_resource =
+                config.firing.as_ref().map(|firing| firing.policy(context));
+            Ok(plan)
+        }
         Context::WeaponResource(context) => {
             let mut plan = Plan::unchanged(request);
             if config.features.ares_ammo {
@@ -603,6 +618,8 @@ pub(crate) fn freeze_shield(shield: shield::Configuration, overload: bool) -> Ve
 mod cameo_tests;
 #[cfg(test)]
 mod emp_tests;
+#[cfg(test)]
+mod firing_tests;
 #[cfg(test)]
 mod foundation_tests;
 #[cfg(test)]

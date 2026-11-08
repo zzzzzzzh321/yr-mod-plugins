@@ -25,7 +25,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development source is 0.28.0, configuration version 18 and entity state
+Current development candidate is 0.29.0, configuration version 19 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
@@ -47,6 +47,14 @@ EVA SetSide, message colors, GraphicalText and score consumption through the sam
 frozen declarations and original presentation owners. Actual-component, legacy and real-retail
 loading checks passed for the bounded Country presentation chain; see the [Chinese guide](../../sdk/dev-kit/README.zh-CN.md#阵营共享配置与玩法).
 
+Version 0.29 adds optional `weapon_firing_resource` queries. The component
+selects directional muzzle-animation bins and reads Ares `ApplyDamage` through
+the shared nullable-bool reader, without another enable flag. The host retains
+animation identities, coordinates, damage stages and the original AI estimate;
+`ApplyDamage` changes ordinary FireAt damage, not that separate estimate. The
+new capability requires its matching host. Older guests keep their original
+request shape and old frozen configurations do not acquire the new domain.
+
 Version 0.28 moves the existing SuperWeapon extensions into
 `features/superweapons/`. `configure_super_read` runs at the original Rules
 visit, preserving first-visit initialization and SW.Warhead reference allocation;
@@ -57,7 +65,7 @@ readers and fixed audio catalogs remain authoritative; the original engine owns
 charge/history, money, two-stage selection and delivery queues, without per-frame
 Wasm mutations.
 
-This candidate uses config18/state1 and the same API v1/WIT name, with a matching
+The 0.28 candidate uses config18/state1 and the same API v1/WIT name, with a matching
 newer host required for the new hooks. Absent declarations preserve the host
 profile; an explicit default policy selects stock behavior. Restore uses the
 exact saved component and frozen configuration; preserve old host/component
