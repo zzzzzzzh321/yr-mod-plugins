@@ -52,7 +52,7 @@ cargo run --locked --release -p vera-mod-pack -- target/wasm32-unknown-unknown/r
 
 0.31 开发候选新增独立 `features/projectiles/airburst.rs` 与可选 `projectile_resource`，为宿主 Ares Airburst／Splits 替换尾部提供每种 Projectile 的冻结声明。物理 Rules 阶段按实际 Projectile 家族保留历史读取 `AirburstSpread`、`RetargetAccuracy`、`Splits`、`RetargetSelf` 和 `AroundTarget`；double 原始位模式由宿主原生读取器提供，插件不做浮点解析或范围修正。默认分别为 1.5、0、false、true；未指定 `AroundTarget` 时取最终 `Splits`。最终绑定不重读物理注册表，运行中不逐帧调用 Wasm。
 
-只有新对局与真实配置重建边界拥有新 airburst 域，并一次性选择 `ares_replacement`；旧非空配置保留既有 `unsupported_replacement` 行为与省略的新返回字段。新域要求同一配置拥有 range／firing 域，子弹航程、目标、随机流、构造、引爆和存读档仍由宿主原有所有者维护。候选为 config21／state1／API v1，WIT 不变，但需要支持新 Hook、字段及 Projectile 专属读取器的配套宿主。这里只声明本批接入范围，完整 AR268 兼容、特殊数值和全部爆炸入口的覆盖以宿主后续验收为准。
+只有新对局与真实配置重建边界拥有新 airburst 域，并一次性选择 `ares_replacement`；旧非空配置保留既有 `unsupported_replacement` 行为与省略的新返回字段。新域要求同一配置拥有 range／firing 域和宿主已有的 Warhead 关系完整接纳，子弹航程、目标、随机流、构造、引爆和存读档仍由宿主原有所有者维护。候选为 config21／state1／API v1，WIT 不变，但需要支持新 Hook、字段及 Projectile 专属读取器的配套宿主。实际组件的普通扇面、Splits 过滤、随机顺序、共享 Dummy、子弹字段和冻结保存回归已经通过；完整 AR268 兼容及尚未覆盖的特殊入口仍见[兼容台账](compatibility/README.zh-CN.md)。
 
 0.30 新增独立 `features/weapons/projectile_range.rs`，在既有 `weapon_firing_resource` 中组合可选 `projectile_range`，并通过 `match_rules.projectile_fuel` 一次性选择宿主航程运行时。新对局及真实配置重建边界默认拥有该域，无需额外启用标签；非空旧配置即使已有 firing 域，也不补入 range 域。完整 Rules 物理读取阶段通过 Weapon 专属历史和宿主 `ares-leptons` 读取器保留 `ProjectileRange`，最终绑定只冻结声明。默认值为 100000 leptons（390.625 格），成功读取的有符号结果原样保留。
 

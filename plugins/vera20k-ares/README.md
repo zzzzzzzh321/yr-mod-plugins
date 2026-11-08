@@ -58,7 +58,8 @@ Final binding retains these declarations without opening a physical registry.
 Fresh configuration and real reset boundaries own the new airburst domain and
 select `ares_replacement`; nonempty old configuration keeps the earlier
 `unsupported_replacement` tail and omits the new resource response. The domain
-requires range/firing ownership for child budgets. Targets, RNG, constructors,
+requires range/firing ownership for child budgets and the host's admitted
+Warhead relationship bindings. Targets, RNG, constructors,
 flight, detonation and persistence remain with the existing host owners, with no
 per-frame Wasm call. Config21/state1 keeps API v1 and WIT unchanged but needs the
 new hook and scoped reader services. This candidate does not claim complete AR268

@@ -99,7 +99,7 @@ RetargetSelf=yes
 
 `AirburstSpread` 默认1.5，`RetargetAccuracy` 默认0，`Splits` 默认false，`RetargetSelf` 默认true，`AroundTarget` 保留未指定／显式值两态，未指定时使用最终 `Splits`。宿主读取实际 Projectile 家族的保留 body 历史；组件经共用 Host 门面调用 `projectile-effective:ares-double-bits`／`ares-bool`／`ares-nullable-bool`，不在 Wasm 内重新解析浮点数、限制区间或读取晚到的同名其他家族。每个完整物理 Rules 阶段更新稀疏声明，最终绑定与资源查询只使用冻结配置。
 
-新对局和真实 ScenarioClear／TypeReset 边界创建独立 airburst 域，选择 `match_rules.airburst_tail=ares_replacement`；旧非空配置不补入该域，保留旧 `unsupported_replacement` 尾部并省略新 resource 返回值。airburst 域要求同一配置已有 range／firing 域，以便宿主的子弹创建器取得武器航程。目标列表、随机流、子弹身份、飞行、引爆和保存恢复仍归宿主原有所有者；不新增逐帧 Wasm 调用。配置21／状态1／API v1，WIT 不变，但需要支持新 Hook 和家族读取服务的配套宿主。这是有界的候选接入，完整 AR268、特殊数值与全部爆炸入口的覆盖以配套验收为准，未据此宣称已通过测试。
+新对局和真实 ScenarioClear／TypeReset 边界创建独立 airburst 域，选择 `match_rules.airburst_tail=ares_replacement`；旧非空配置不补入该域，保留旧 `unsupported_replacement` 尾部并省略新 resource 返回值。airburst 域要求同一配置已有 range／firing 域，以便宿主的子弹创建器取得武器航程，并要求宿主已有的 Warhead 关系完整接纳。目标列表、随机流、子弹身份、飞行、引爆和保存恢复仍归宿主原有所有者；不新增逐帧 Wasm 调用。配置21／状态1／API v1，WIT 不变，但需要支持新 Hook 和家族读取服务的配套宿主。实际组件的普通扇面、Splits 过滤、随机顺序、共享 Dummy、子弹字段及冻结保存回归已经通过；完整 AR268、全部特殊入口与尚未动态覆盖的场景仍见[兼容台账](../../compatibility/README.zh-CN.md)。
 
 0.30 通过独立 `features/weapons/projectile_range.rs` 接入普通 FireAt 的武器初始航程。作者仍在武器段配置 `ProjectileRange`（单位为格），在所用抛射体段设置 `Ranged=yes` 才会消耗航程并在耗尽时进入宿主共享引爆路径，无需额外功能启用标签。例如在作品已有武器／抛射体定义中加入：
 
