@@ -887,8 +887,13 @@ impl Host for NuclearSourceHost {
                         };
                         serde_json::to_vec(&value).map_err(|e| e.to_string())
                     }
-                    "super-country-mask" | "super-building-list" => Ok(b"null".to_vec()),
-                    "super-effective:ares-int" | "super-effective:bool" | "super-eva-reference" => {
+                    "super-country-mask" | "super-building-list" | "super-delivery-list" => {
+                        Ok(b"null".to_vec())
+                    }
+                    "super-effective:ares-int"
+                    | "super-effective:bool"
+                    | "super-effective:name:32"
+                    | "super-eva-reference" => {
                         assert_ne!(key, "SW.Damage", "Nuclear scalars need the physical pass");
                         serde_json::to_vec(&input.current).map_err(|e| e.to_string())
                     }
@@ -984,13 +989,22 @@ fn nuclear_configuration_retains_mapped_handler_and_physical_settings() {
         activation_sound: NullableResourceName::Clear,
     };
     assert_eq!(payload(&config), expected);
-    // A later recognized stock kind updates native history but retains the
-    // first stock handler. The host's predecoded invalid scalar/unknown
-    // reference replies retain that handler's values on physical pass 2.
     let (config, action) = nuclear_visit(
         config,
         NuclearSourceHost {
             read: 2,
+            type_name: Some("UnitDelivery"),
+            initialize: false,
+            changed: false,
+        },
+    );
+    assert_eq!(action, SuperReferenceRead::WarheadFromCurrentSection);
+    // A later recognized stock kind updates native history but retains the
+    // first stock handler after the custom body; it does not replay defaults.
+    let (config, action) = nuclear_visit(
+        config,
+        NuclearSourceHost {
+            read: 3,
             type_name: Some("IronCurtain"),
             initialize: false,
             changed: false,
@@ -1018,7 +1032,13 @@ fn nuclear_configuration_does_not_initialize_after_absence_or_in_old_cohort() {
     assert_eq!(action, SuperReferenceRead::Retain);
     let mut old = Configuration::default();
     old.superweapons = Some(superweapons::Configuration::default());
-    for config in [absent, serde_json::to_vec(&old).unwrap()] {
+    for (config, expected_action) in [
+        (absent, SuperReferenceRead::WarheadFromCurrentSection),
+        (
+            serde_json::to_vec(&old).unwrap(),
+            SuperReferenceRead::Retain,
+        ),
+    ] {
         let (config, action) = nuclear_visit(
             config,
             NuclearSourceHost {
@@ -1028,7 +1048,7 @@ fn nuclear_configuration_does_not_initialize_after_absence_or_in_old_cohort() {
                 changed: false,
             },
         );
-        assert_eq!(action, SuperReferenceRead::Retain);
+        assert_eq!(action, expected_action);
         let policy = frozen_query(
             &config,
             Context::SuperWeaponResource(vera_mod_api::SuperWeaponResourceContext {}),

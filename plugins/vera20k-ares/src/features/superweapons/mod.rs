@@ -118,18 +118,21 @@ impl Configuration {
                 nuclear.read(context, owner, selected, view)?;
             }
         }
-        // Stock kinds dispatch through the first mapped handler, independent
-        // of the latest Type text. GenericWarhead keeps its older read gate.
+        // Common10033701 reads WH before handler dispatch10033ABD. The new
+        // cohort must retain it even while a custom Type temporarily selects
+        // another handler. Only the Nuclear-specific payload read depends on
+        // that selection; historical cohorts keep their earlier Generic gate.
         Ok(
             if context.body_read && nuclear_enabled && state.selects_nuclear() {
                 SuperReferenceRead::NuclearFromCurrentSection {
                     initialize: initialize_nuclear,
                 }
             } else if context.body_read
-                && context
-                    .effective_type
-                    .as_deref()
-                    .is_some_and(|kind| kind.eq_ignore_ascii_case("GenericWarhead"))
+                && (nuclear_enabled
+                    || context
+                        .effective_type
+                        .as_deref()
+                        .is_some_and(|kind| kind.eq_ignore_ascii_case("GenericWarhead")))
             {
                 SuperReferenceRead::WarheadFromCurrentSection
             } else {
