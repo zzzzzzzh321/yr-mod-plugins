@@ -90,7 +90,7 @@ pub use superweapon::{
     SuperWeaponResourcePolicy, SuperWeaponSemantics, SuperWeaponAvailabilityPolicy,
     SuperWeaponChargePolicy, SuperWeaponPresentationPolicy, SuperWeaponTargetingPolicy,
     SuperWeaponDeliveryOwner, SuperWeaponPayloadPolicy, SuperWeaponDeclaration,
-    SuperWeaponProviderDeclaration,
+    SuperWeaponProviderDeclaration, SuperWeaponCommonTargetingPolicy,
 };
 
 use serde::{Deserialize, Serialize};

@@ -1,5 +1,7 @@
 # VERA20K 插件独立开发包
 
+0.37／配置26／状态1新增可选 `SuperWeaponDeclaration.common_targeting`。插件按物理规则层保留射程、目标模式／偏好、手动／自动掩码及 AutoFire／ManualFire／FireIntoShroud；宿主将其投影到已有目标与 AI 所有者，普通构建也可使用。核弹的预览、选点与发射井资格共用配置，已提交事件保留 Activate 的直接投放分支。Generic 空弹头在 Activate 失败时消耗充能，但不扣费、不计成功发射；旧组件保持历史行为。不新增逐帧 WASM 调用；完整 Ares 兼容仍在推进。
+
 0.36／配置25／状态1新增外置 Nuclear 核弹引用与发射子链。纯启动声明 `master_type_lists` 在各层类型数据读取前启用原有 `[WeaponTypes]` 注册器；实际 Weapon 引用和发射它的超武定义贯通发射井、直接投放、NukeMaker、保存与恢复。`SW.Warhead` 按原始时点查找已有弹头，经过中间自定义 Type 的物理节仍保留通用读取，不从最终合并名称补查。裸弹航程保持 INT_MAX，不复制武器的 ProjectileRange。插件继续提供冻结配置，充能、费用、飞行、伤害和退场复用宿主所有者，不新增逐帧 Wasm 调用。完整 Ares／AR315 仍未完成。
 
 0.35／配置24／状态1新增可选 `MatchRulesPolicy.shrapnel_weapon_assignment`。新对局及真实重建边界默认声明启用；历史非空配置缺字段时保持原行为。`ShrapnelWeapon` 保留实际 Weapon 数组引用，安装引用后的碎片弹通过共享 Fire 读取该实例的 Range，并在引爆时读取 RadLevel。其裸构造航程仍为 INT_MAX，不复制 Weapon 的 ProjectileRange；这与 Airburst 工厂不同。字段为资源接纳时的静态声明，需配套宿主，不新增逐帧Wasm调用。验证范围包括实际组件开火、碎片飞行、保存恢复和伤害接收，完整Ares兼容仍在推进。
@@ -90,6 +92,8 @@ dist/release-new/
 
 ## SDK 与引擎版本
 
+0.37 需配套支持 `common_targeting` 的宿主；API v1／WIT 名称未变不表示旧宿主支持新字段。新声明只在新对局／真实配置重建时产生，历史非空配置缺字段时保持原行为。详见[超级武器配置](../../plugins/vera20k-ares/SUPERWEAPON.zh-CN.md)。
+
 0.36 需要支持 `MasterTypeLists` 和 Nuclear 声明的配套宿主；API v1／WIT 名称不变不代表旧宿主已经提供这些能力。接口源见[启动声明](../api/src/startup.rs)和[超武声明](../api/src/superweapon.rs)，SDK 快照来源固定在 `sdk/source.json`。后续在已有接口范围内修改玩法只需重编插件；本次通用弹头跨层修复即由新组件在同一个宿主上通过回归。
 
 核弹配置仍写在原有 INI 段。上升武器用 `WeaponType`，下落载荷用 `Nuke.Payload`；新增载荷须由 `[WeaponTypes]` 在超武读取前注册。`SW.Damage` 的负数使用载荷武器伤害，未覆盖的 `SW.Warhead` 使用载荷武器弹头；覆盖弹头必须已经存在于 `[Warheads]` 或更早物理读取分配的目录，未知／空值保留，`none` 清除。`Nuke.SiloLaunch=no` 直接投放，找不到合格发射井也使用直接投放。`Nuke.TakeOff` 和 `SW.ActivationSound` 区分继承默认、显式静音及具名覆盖；`Nuke.PsiWarning` 的初始化查找只使用当时已登记的动画。
@@ -97,7 +101,7 @@ dist/release-new/
 当前验证包括冷启动的规则→模式→地图、实际充能发射、两阶段与直接载荷、费用／记录、伤害／退场、原组件精确保存恢复及旧组件对照。光照与 `NukeFlash.Duration`／`PreImpactAnim`、自定义 EVA Ready／Detected／Activated、共同射程字段、升级挂载和其它边界仍见[兼容台账](../../compatibility/README.zh-CN.md)，不可把本批子链当成完整核弹兼容。旧完整存档继续保留原引擎和精确组件；不承诺跨引擎布局迁移。
 
 
-当前候选为 **0.36／配置25／状态1**，需要本批配套引擎。武器扩展按 `WeaponTypeRef.ordinal` 区分真实实例，名称仅用于说明和校验；两个长名称截断后相同也不会共用 Ammo、ApplyDamage 或 ProjectileRange 历史。公共调用仍集中在 `support/host.rs`，三个功能各在既有武器模块维护自己的冻结字段；不新增第二个弹药、弹体或计时器所有者。
+当前候选为 **0.37／配置26／状态1**，需要本批配套引擎。武器扩展按 `WeaponTypeRef.ordinal` 区分真实实例，名称仅用于说明和校验；两个长名称截断后相同也不会共用 Ammo、ApplyDamage 或 ProjectileRange 历史。公共调用仍集中在 `support/host.rs`，三个功能各在既有武器模块维护自己的冻结字段；不新增第二个弹药、弹体或计时器所有者。
 
 新组件使用 `weapon-registry-view` 和 `weapon-instance-effective:`，并通过 `weapon_instance_resource` 一次返回现有弹药／开火策略。旧组件保留旧请求，只能在唯一名称域回退；同名多实例要求新组件。完整存档布局与组件状态版本分别管理，旧完整存档继续使用原引擎与精确组件。API v1 相同不代表旧宿主能加载新的可选接口。
 

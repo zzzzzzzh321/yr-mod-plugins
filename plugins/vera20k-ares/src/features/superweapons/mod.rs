@@ -24,12 +24,15 @@ pub(crate) struct Configuration {
     /// configuration does not acquire the Nuclear handler on later reads.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) nuclear: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) common_targeting: Option<bool>,
 }
 
 impl Configuration {
     pub(crate) fn for_new_match() -> Self {
         Self {
             nuclear: Some(true),
+            common_targeting: Some(true),
             ..Self::default()
         }
     }
@@ -55,12 +58,16 @@ impl Configuration {
     }
 
     fn register(&mut self, ordinal: u32, stored_id: &str) -> Result<&mut TypeState, String> {
+        let common_enabled = self.common_targeting == Some(true);
         let state = self
             .types
             .entry(ordinal)
             .or_insert_with(|| TypeState::new(stored_id));
         if state.stored_id != stored_id {
             return Err("SuperWeapon read identity changed without a Type reset".into());
+        }
+        if common_enabled {
+            state.targeting.enable_common();
         }
         Ok(state)
     }
@@ -97,6 +104,13 @@ impl Configuration {
         //10033284 ->10033347 consumes a first absent body with mode0.
         if !state.initialized {
             if context.body_read {
+                state.targeting.map_initial_handler(
+                    context
+                        .effective_type
+                        .as_deref()
+                        .and_then(Kind::parse)
+                        .is_some(),
+                );
                 state.targeting.mode = context
                     .effective_type
                     .as_deref()
@@ -183,6 +197,12 @@ impl Configuration {
     pub(crate) fn query(&self) -> Result<api::SuperWeaponResourcePolicy, String> {
         let mut definitions = Vec::with_capacity(self.types.len());
         for (&ordinal, state) in &self.types {
+            let common_targeting =
+                if self.common_targeting == Some(true) && state.selects_common_targeting() {
+                    state.targeting.common_policy()?
+                } else {
+                    None
+                };
             let payload = match state.kind {
                 Kind::GenericWarhead => {
                     let (automatic_target, automatic_house) = state.targeting.automatic()?;
@@ -194,9 +214,21 @@ impl Configuration {
                             automatic_target,
                             automatic_house,
                             offensive_ai: state.targeting.offensive(),
-                            fire_into_shroud: state.generic.fire_into_shroud,
-                            range_minimum: state.generic.range_minimum_bits,
-                            range_maximum: state.generic.range_maximum_bits,
+                            fire_into_shroud: common_targeting
+                                .as_ref()
+                                .map_or(state.generic.fire_into_shroud, |common| {
+                                    common.fire_into_shroud
+                                }),
+                            range_minimum: common_targeting
+                                .as_ref()
+                                .map_or(state.generic.range_minimum_bits, |common| {
+                                    common.range_minimum
+                                }),
+                            range_maximum: common_targeting
+                                .as_ref()
+                                .map_or(state.generic.range_maximum_bits, |common| {
+                                    common.range_maximum
+                                }),
                         },
                     }
                 }
@@ -256,6 +288,7 @@ impl Configuration {
                     sound: state.presentation.sound.clone(),
                 },
                 payload,
+                common_targeting,
             });
         }
         let policy = api::SuperWeaponResourcePolicy {

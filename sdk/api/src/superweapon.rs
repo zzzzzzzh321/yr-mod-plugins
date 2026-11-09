@@ -154,6 +154,55 @@ pub struct SuperWeaponTargetingPolicy {
     pub range_maximum: u64,
 }
 
+/// Common immutable targeting, independent of the selected effect handler.
+/// Configuration owns physical-read retention; the host owns target search,
+/// launch-site observations and all live state. No per-frame callback is added.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SuperWeaponCommonTargetingPolicy {
+    /// Original AITargeting names in reader order (0..21).
+    pub mode: u8,
+    /// Effective preference: none=0, offensive=1, defensive=2.
+    pub preference: u8,
+    pub auto_fire: bool,
+    pub manual_fire: bool,
+    pub fire_into_shroud: bool,
+    pub manual_target: u8,
+    pub manual_house: u8,
+    pub automatic_target: u8,
+    pub automatic_house: u8,
+    /// Retained native binary64 bits, including nonfinite authored values.
+    /// A malformed physical read retains its previous value. The original
+    /// prepared range gate and per-site predicate interpret these separately.
+    pub range_minimum: u64,
+    pub range_maximum: u64,
+}
+
+impl SuperWeaponCommonTargetingPolicy {
+    pub fn validate(&self) -> Result<(), String> {
+        if self.mode >= 21 || self.preference >= 3 {
+            return Err("invalid common SuperWeapon targeting mode or preference".into());
+        }
+        if self.manual_house & !7 != 0 || self.automatic_house & !7 != 0 {
+            return Err("invalid common SuperWeapon targeting house mask".into());
+        }
+        Ok(())
+    }
+
+    /// The old Generic ABI is a compatibility projection, not another source
+    /// of effective ranges, masks or AI selection when common data is present.
+    fn matches_legacy(&self, legacy: &SuperWeaponTargetingPolicy) -> bool {
+        self.manual_target == legacy.manual_target
+            && self.manual_house == legacy.manual_house
+            && self.automatic_target == legacy.automatic_target
+            && self.automatic_house == legacy.automatic_house
+            && (self.mode == 8) == legacy.offensive_ai
+            && self.fire_into_shroud == legacy.fire_into_shroud
+            && self.range_minimum == legacy.range_minimum
+            && self.range_maximum == legacy.range_maximum
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SuperWeaponDeliveryOwner {
@@ -206,6 +255,10 @@ pub struct SuperWeaponDeclaration {
     pub insufficient_funds_eva: crate::NullableResourceName,
     pub presentation: SuperWeaponPresentationPolicy,
     pub payload: SuperWeaponPayloadPolicy,
+    /// None preserves the historical payload-specific targeting ABI. A present
+    /// declaration selects the common host target/AI owners for this definition.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub common_targeting: Option<SuperWeaponCommonTargetingPolicy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -249,6 +302,9 @@ impl SuperWeaponResourcePolicy {
         }
         let mut ordinals = BTreeSet::new();
         for definition in &self.definitions {
+            if let Some(targeting) = &definition.common_targeting {
+                targeting.validate()?;
+            }
             if !ordinals.insert(definition.ordinal)
                 || !valid_name(&definition.stored_id)
                 || definition.availability.auxiliary.len() > LIMIT
@@ -283,6 +339,15 @@ impl SuperWeaponResourcePolicy {
                 SuperWeaponPayloadPolicy::GenericWarhead { targeting, .. } => {
                     if targeting.manual_house & !7 != 0 || targeting.automatic_house & !7 != 0 {
                         return Err("invalid SuperWeapon house mask".into());
+                    }
+                    if definition
+                        .common_targeting
+                        .as_ref()
+                        .is_some_and(|common| !common.matches_legacy(targeting))
+                    {
+                        return Err(
+                            "conflicting common and historical SuperWeapon targeting".into()
+                        );
                     }
                 }
                 SuperWeaponPayloadPolicy::UnitDelivery {
@@ -319,6 +384,88 @@ impl SuperWeaponResourcePolicy {
 mod tests {
     use super::*;
     use crate::{API_VERSION, Context, Plan, Request};
+
+    #[test]
+    fn common_targeting_keeps_old_absence_and_rejects_conflicting_authority() {
+        let mut policy = SuperWeaponResourcePolicy::default();
+        policy.definitions.push(SuperWeaponDeclaration {
+            ordinal: 0,
+            stored_id: "Atomic".into(),
+            availability: SuperWeaponAvailabilityPolicy {
+                allow_player: true,
+                allow_ai: true,
+                required_houses: u32::MAX,
+                forbidden_houses: 0,
+                shots: -1,
+                auxiliary: vec![],
+                negative: vec![],
+            },
+            charge: SuperWeaponChargePolicy::default(),
+            constraints: 4,
+            use_ai_targeting: false,
+            money_amount: 0,
+            insufficient_funds_eva: crate::NullableResourceName::Inherit,
+            presentation: SuperWeaponPresentationPolicy {
+                animation: crate::NullableResourceName::Inherit,
+                height: 0,
+                visibility: 7,
+                sound: crate::NullableResourceName::Inherit,
+            },
+            payload: SuperWeaponPayloadPolicy::Retail,
+            common_targeting: None,
+        });
+        let old = serde_json::to_value(&policy).unwrap();
+        assert!(old["definitions"][0].get("common_targeting").is_none());
+        let restored: SuperWeaponResourcePolicy = serde_json::from_value(old).unwrap();
+        assert!(restored.definitions[0].common_targeting.is_none());
+        restored.validate().unwrap();
+
+        let common = SuperWeaponCommonTargetingPolicy {
+            mode: 8,
+            preference: 0,
+            auto_fire: false,
+            manual_fire: true,
+            fire_into_shroud: true,
+            manual_target: 0,
+            manual_house: 0,
+            automatic_target: 0x38,
+            automatic_house: 4,
+            range_minimum: f64::NEG_INFINITY.to_bits(),
+            range_maximum: f64::INFINITY.to_bits(),
+        };
+        policy.definitions[0].payload = SuperWeaponPayloadPolicy::GenericWarhead {
+            damage: 1,
+            targeting: SuperWeaponTargetingPolicy {
+                manual_target: 0,
+                manual_house: 0,
+                automatic_target: 0x38,
+                automatic_house: 4,
+                offensive_ai: true,
+                fire_into_shroud: true,
+                range_minimum: common.range_minimum,
+                range_maximum: common.range_maximum,
+            },
+        };
+        policy.definitions[0].common_targeting = Some(common.clone());
+        policy.validate().unwrap();
+        let current = policy.definitions[0].common_targeting.as_mut().unwrap();
+        current.mode = 21;
+        assert!(policy.validate().is_err());
+        policy.definitions[0].common_targeting = Some(common.clone());
+        policy.definitions[0]
+            .common_targeting
+            .as_mut()
+            .unwrap()
+            .preference = 3;
+        assert!(policy.validate().is_err());
+        policy.definitions[0].common_targeting = Some(common);
+        policy.definitions[0]
+            .common_targeting
+            .as_mut()
+            .unwrap()
+            .range_maximum = 5.0_f64.to_bits();
+        assert!(policy.validate().unwrap_err().contains("conflicting"));
+    }
 
     #[test]
     fn superweapon_resource_selection_is_pure_and_rejects_cross_domain_authority() {

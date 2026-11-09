@@ -188,6 +188,13 @@ impl TypeState {
         matches!(self.kind, Kind::Retail(_)) && self.nuclear.is_some()
     }
 
+    pub(super) fn selects_common_targeting(&self) -> bool {
+        // GetNewSWType100328A0 uses the current custom Type, otherwise the
+        // first mapped stock handler. An absent first body cannot map later.
+        matches!(self.kind, Kind::GenericWarhead | Kind::UnitDelivery)
+            || matches!(self.kind, Kind::Retail(_)) && self.targeting.has_mapped_handler()
+    }
+
     pub(super) fn initialize_eva_default<H: Host>(
         &mut self,
         view: &ConfigView<'_, H>,
@@ -297,13 +304,19 @@ impl TypeState {
         };
         self.money_amount =
             view.superweapon_read(read, owner, "Money.Amount", "super-effective:ares-int", 0)?;
-        self.use_ai_targeting = view.superweapon_read(
-            read,
-            owner,
-            "SW.UseAITargeting",
-            "super-effective:bool",
-            false,
-        )?;
+        self.use_ai_targeting = if self.targeting.has_common() {
+            // Common100335BC: the same physical retained bool as the other
+            // targeting fields, not the final stock profile's bool parser.
+            raw.read_ares_bool("SW.UseAITargeting", self.use_ai_targeting)
+        } else {
+            view.superweapon_read(
+                read,
+                owner,
+                "SW.UseAITargeting",
+                "super-effective:bool",
+                false,
+            )?
+        };
         self.insufficient_funds_eva = view.superweapon_read(
             read,
             owner,
@@ -316,15 +329,19 @@ impl TypeState {
         if self.kind == Kind::GenericWarhead {
             self.generic.damage =
                 view.superweapon_read(read, owner, "SW.Damage", "super-effective:int", 0)?;
-            self.generic.fire_into_shroud = view.superweapon_read(
-                read,
-                owner,
-                "SW.FireIntoShroud",
-                "super-effective:bool",
-                true,
-            )?;
-            self.generic.range_minimum_bits = range_bits(view, read, owner, "SW.RangeMinimum")?;
-            self.generic.range_maximum_bits = range_bits(view, read, owner, "SW.RangeMaximum")?;
+            if !self.targeting.has_common() {
+                // Historical frozen cohorts retain this older ABI path.
+                // Fresh cohorts have one common physical range/shroud owner.
+                self.generic.fire_into_shroud = view.superweapon_read(
+                    read,
+                    owner,
+                    "SW.FireIntoShroud",
+                    "super-effective:bool",
+                    true,
+                )?;
+                self.generic.range_minimum_bits = range_bits(view, read, owner, "SW.RangeMinimum")?;
+                self.generic.range_maximum_bits = range_bits(view, read, owner, "SW.RangeMaximum")?;
+            }
         }
         // Preserve the existing raw-Type-or-existing-state gate; do not
         // enter it from the final recognized dispatch alone.

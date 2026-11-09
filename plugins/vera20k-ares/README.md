@@ -1,5 +1,7 @@
 # vera20k-ares — external gameplay reference component
 
+Version 0.37 / config26 adds optional common SuperWeapon targeting declarations, physical range retention and ordinary-host AI/cameo integration. Existing simulation owners execute selection, activation, charge, settlement and restoration. Historical absent declarations retain their prior route; matched host support is required. See the [Chinese configuration guide](SUPERWEAPON.zh-CN.md). Complete Ares compatibility remains open.
+
 Version 0.35 / config24 adds optional `MatchRulesPolicy.shrapnel_weapon_assignment`. Fresh configuration and real reset boundaries select it; an older nonempty frozen cohort omits it. `ShrapnelWeapon` retains the actual Weapon allocation, which the installed child keeps through Fire and detonation for Range and RadLevel. Its bare constructor travel budget stays INT_MAX, without a Weapon ProjectileRange copy. This is an admission-time declaration requiring the paired host, with no per-frame Wasm call. Validation covers real-component firing, fragment flight, save/restore and receivers; complete Ares compatibility remains open.
 
 This component implements the currently ported VERA20K shield chain outside
@@ -17,7 +19,7 @@ This plugin is maintained in the independent `plugin-dev` project at
 dependencies and the packager; the runtime stays in the engine. The Cargo package is
 `vera20k-ares`, its raw core artifact is `vera20k_ares.wasm`, and its publication
 filename is `vera20k-ares.wasm`. The internal `vera.reference-gameplay` identity is retained. Current source is
-version 0.35.0, config_version=24 and state_version=1. API v1 and WIT are unchanged. The filename
+version 0.37.0, config_version=26 and state_version=1. API v1 and WIT are unchanged. The filename
 does not claim complete Ares compatibility; the retained Phobos-compatible
 shield and authored overload remain examples in this first plugin.
 

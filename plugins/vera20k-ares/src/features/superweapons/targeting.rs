@@ -60,6 +60,38 @@ const MODES: [(&str, u8, u8, u16); 21] = [
     ("lightningrandom", 0, 0, 0),
 ];
 
+/// Table1009B8A4, stride12, byte+4. The nullable preference falls back to
+/// this row after the first mapped handler and each physical mode read.
+const PREFERENCES: [u8; 21] = [
+    0, 1, 1, 0, 1, 0, 2, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0,
+];
+
+#[derive(Serialize, Deserialize)]
+struct Common {
+    mapped_handler: bool,
+    preference: Option<u8>,
+    auto_fire: bool,
+    manual_fire: bool,
+    fire_into_shroud: bool,
+    range_minimum: u64,
+    range_maximum: u64,
+}
+
+impl Default for Common {
+    fn default() -> Self {
+        // SWTypeExt ctor10031733 and1003184E/59.
+        Self {
+            mapped_handler: false,
+            preference: None,
+            auto_fire: false,
+            manual_fire: true,
+            fire_into_shroud: true,
+            range_minimum: (-1.0_f64).to_bits(),
+            range_maximum: (-1.0_f64).to_bits(),
+        }
+    }
+}
+
 #[derive(Default, Serialize, Deserialize)]
 pub(crate) struct Targeting {
     pub(crate) mode: u8,
@@ -68,12 +100,43 @@ pub(crate) struct Targeting {
     pub(crate) manual_house: u8,
     pub(crate) ai_target: Option<u8>,
     pub(crate) ai_house: Option<u8>,
+    /// Absent in historical frozen configurations. Only a fresh common
+    /// targeting cohort enables these retained physical fields.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    common: Option<Common>,
 }
 
 impl Targeting {
+    pub(super) fn enable_common(&mut self) {
+        self.common.get_or_insert_with(Common::default);
+    }
+
+    pub(super) fn has_common(&self) -> bool {
+        self.common.is_some()
+    }
+
+    pub(super) fn map_initial_handler(&mut self, mapped: bool) {
+        if let Some(common) = &mut self.common {
+            common.mapped_handler = mapped;
+        }
+    }
+
+    pub(super) fn has_mapped_handler(&self) -> bool {
+        self.common
+            .as_ref()
+            .is_some_and(|common| common.mapped_handler)
+    }
+
     /// LoadFromINI100335D2..1003367D. Unknown preserves, successful zero
     /// sets the nullable flag. No aliases, trimming or guest mask parser.
     pub(super) fn read<H: Host>(&mut self, section: &Section<'_, H>) -> Result<(), String> {
+        if let Some(common) = &mut self.common {
+            // Common1003341A..10033457: missing/invalid retains the value.
+            common.fire_into_shroud =
+                section.read_ares_bool("SW.FireIntoShroud", common.fire_into_shroud);
+            common.auto_fire = section.read_ares_bool("SW.AutoFire", common.auto_fire);
+            common.manual_fire = section.read_ares_bool("SW.ManualFire", common.manual_fire);
+        }
         if let Some(name) = section.read_name("SW.AITargeting", 2048)
             && let Some(mode) = MODES
                 .iter()
@@ -85,6 +148,15 @@ impl Targeting {
             section.read_comma_mask("SW.AITargeting.Constraints", &CONSTRAINT_TOKENS)
         {
             self.constraints = Some(u16::try_from(value).map_err(|e| e.to_string())?);
+        }
+        if let Some(common) = &mut self.common
+            && let Some(name) = section.read_name("SW.AITargeting.Preference", 2048)
+            && let Some(value) = ["none", "offensive", "defensive"]
+                .iter()
+                .position(|value| value.eq_ignore_ascii_case(&name))
+        {
+            //100343C0 writes only on an exact case-insensitive name match.
+            common.preference = Some(value as u8);
         }
         if let Some(value) = section.read_comma_mask("SW.RequiresTarget", &TARGET_TOKENS) {
             self.manual_target = u8::try_from(value).map_err(|e| e.to_string())?;
@@ -98,7 +170,42 @@ impl Targeting {
         if let Some(value) = section.read_comma_mask("SW.AIRequiresHouse", &HOUSE_TOKENS) {
             self.ai_house = Some(u8::try_from(value).map_err(|e| e.to_string())?);
         }
+        if let Some(common) = &mut self.common {
+            // Common10033942/58: physical retained binary64 reads, including
+            // percentages and nonfinite values; never a final merged lookup.
+            common.range_minimum =
+                section.read_ares_double_bits("SW.RangeMinimum", common.range_minimum);
+            common.range_maximum =
+                section.read_ares_double_bits("SW.RangeMaximum", common.range_maximum);
+        }
         Ok(())
+    }
+
+    pub(crate) fn common_policy(
+        &self,
+    ) -> Result<Option<vera_mod_api::SuperWeaponCommonTargetingPolicy>, String> {
+        let Some(common) = &self.common else {
+            return Ok(None);
+        };
+        let (automatic_target, automatic_house) = self.automatic()?;
+        let preference = common.preference.unwrap_or(
+            *PREFERENCES
+                .get(self.mode as usize)
+                .ok_or("invalid retained Super targeting mode")?,
+        );
+        Ok(Some(vera_mod_api::SuperWeaponCommonTargetingPolicy {
+            mode: self.mode,
+            preference,
+            auto_fire: common.auto_fire,
+            manual_fire: common.manual_fire,
+            fire_into_shroud: common.fire_into_shroud,
+            manual_target: self.manual_target,
+            manual_house: self.manual_house,
+            automatic_target,
+            automatic_house,
+            range_minimum: common.range_minimum,
+            range_maximum: common.range_maximum,
+        }))
     }
     pub(crate) fn effective_constraints(&self) -> Result<u16, String> {
         let row = MODES

@@ -798,7 +798,15 @@ impl Host for NuclearSourceHost {
         (self.type_name.is_some()
             && (key == "Type"
                 || (self.changed || self.read == 2)
-                    && matches!(key, "SW.Damage" | "Nuke.SiloLaunch" | "SW.ActivationSound")))
+                    && matches!(
+                        key,
+                        "SW.Damage"
+                            | "Nuke.SiloLaunch"
+                            | "SW.ActivationSound"
+                            | "SW.RangeMinimum"
+                            | "SW.RangeMaximum"
+                            | "SW.AITargeting.Preference"
+                    )))
         .then(|| "predecoded physical value".into())
     }
     fn config_read(
@@ -835,6 +843,24 @@ impl Host for NuclearSourceHost {
             "name:40" => {
                 assert_eq!(key, "Type");
                 serde_json::to_vec(&self.type_name).map_err(|e| e.to_string())
+            }
+            "name:2048" => {
+                assert_eq!(key, "SW.AITargeting.Preference");
+                serde_json::to_vec(&Some(if self.read == 2 { "unknown" } else { "none" }))
+                    .map_err(|e| e.to_string())
+            }
+            "ares-double-bits" => {
+                assert!(matches!(key, "SW.RangeMinimum" | "SW.RangeMaximum"));
+                if self.read == 2 {
+                    Ok(current.to_vec()) // host-decoded invalid read retains
+                } else {
+                    serde_json::to_vec(&if key == "SW.RangeMinimum" {
+                        2.0_f64.to_bits()
+                    } else {
+                        5.0_f64.to_bits()
+                    })
+                    .map_err(|e| e.to_string())
+                }
             }
             "ares-int" => {
                 assert_eq!(key, "SW.Damage");
@@ -1015,6 +1041,21 @@ fn nuclear_configuration_retains_mapped_handler_and_physical_settings() {
         SuperReferenceRead::NuclearFromCurrentSection { initialize: false }
     );
     assert_eq!(payload(&config), expected);
+    let common = frozen_query(
+        &config,
+        Context::SuperWeaponResource(vera_mod_api::SuperWeaponResourceContext {}),
+    )
+    .superweapon_resource
+    .unwrap()
+    .definitions
+    .remove(0)
+    .common_targeting
+    .unwrap();
+    assert_eq!((common.mode, common.preference), (1, 0));
+    assert_eq!(
+        (common.range_minimum, common.range_maximum),
+        (2.0_f64.to_bits(), 5.0_f64.to_bits())
+    );
 }
 
 #[test]
@@ -1055,6 +1096,10 @@ fn nuclear_configuration_does_not_initialize_after_absence_or_in_old_cohort() {
         )
         .superweapon_resource
         .unwrap();
+        assert!(
+            policy.definitions[0].common_targeting.is_none(),
+            "neither an unmapped stock handler nor an old cohort acquires common targeting"
+        );
         assert_eq!(
             policy.definitions[0].payload,
             SuperWeaponPayloadPolicy::Retail
