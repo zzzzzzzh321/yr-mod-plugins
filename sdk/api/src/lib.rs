@@ -79,9 +79,10 @@ pub use resource::{
     WeaponInstanceResourcePolicy,
 };
 pub use startup::{
-    CsfLanguageGate, EvaCatalogPolicy, IncludeSemantics, LongListReadersPolicy, MasterTypeListsPolicy,
-    MAX_STARTUP_RESOURCES, StartupAudioCatalog, StartupAudioPair, StartupCsfCandidate,
-    StartupCsfComposition, SpawnIdentityPolicy, StartupResourceContext, StartupResourcePolicy,
+    CsfLanguageGate, EvaCatalogPolicy, IncludeSemantics, LongListReadersPolicy,
+    MasterTypeListsPolicy, MAX_STARTUP_RESOURCES, StartupAudioCatalog, StartupAudioPair,
+    StartupCsfCandidate, StartupCsfComposition, SpawnIdentityPolicy, StartupResourceContext,
+    StartupResourcePolicy,
 };
 
 pub use superweapon::{
@@ -90,7 +91,8 @@ pub use superweapon::{
     SuperWeaponResourcePolicy, SuperWeaponSemantics, SuperWeaponAvailabilityPolicy,
     SuperWeaponChargePolicy, SuperWeaponPresentationPolicy, SuperWeaponTargetingPolicy,
     SuperWeaponDeliveryOwner, SuperWeaponPayloadPolicy, SuperWeaponDeclaration,
-    SuperWeaponProviderDeclaration, SuperWeaponCommonTargetingPolicy,
+    SuperWeaponProviderDeclaration, SuperWeaponCommonTargetingPolicy, SuperWeaponInfluencePolicy,
+    TechnoInfluenceDeclaration,
 };
 
 use serde::{Deserialize, Serialize};

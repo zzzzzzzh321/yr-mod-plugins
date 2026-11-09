@@ -1,6 +1,7 @@
 //! Retained SWTypeExt configuration. The native registry owns reference
 //! allocation; the engine keeps all live Super/timer/wallet state.
 mod config;
+mod influence;
 mod nuclear;
 mod targeting;
 
@@ -26,6 +27,8 @@ pub(crate) struct Configuration {
     pub(crate) nuclear: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) common_targeting: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    techno_influence: Option<influence::Technos>,
 }
 
 impl Configuration {
@@ -33,6 +36,7 @@ impl Configuration {
         Self {
             nuclear: Some(true),
             common_targeting: Some(true),
+            techno_influence: Some(influence::Technos::default()),
             ..Self::default()
         }
     }
@@ -59,6 +63,7 @@ impl Configuration {
 
     fn register(&mut self, ordinal: u32, stored_id: &str) -> Result<&mut TypeState, String> {
         let common_enabled = self.common_targeting == Some(true);
+        let influence_enabled = self.techno_influence.is_some();
         let state = self
             .types
             .entry(ordinal)
@@ -68,6 +73,9 @@ impl Configuration {
         }
         if common_enabled {
             state.targeting.enable_common();
+        }
+        if influence_enabled {
+            state.influence.get_or_insert_with(Default::default);
         }
         Ok(state)
     }
@@ -194,6 +202,19 @@ impl Configuration {
         Ok(())
     }
 
+    /// Consume the already loaded common physical view once per non-final
+    /// Rules pass. Historical nonempty configuration never acquires ownership.
+    pub(crate) fn configure_technos<H: Host>(
+        &mut self,
+        view: &ConfigView<'_, H>,
+        physical: &api::ProductionRegistryView,
+    ) -> Result<(), String> {
+        if let Some(technos) = &mut self.techno_influence {
+            technos.configure(view, physical)?;
+        }
+        Ok(())
+    }
+
     pub(crate) fn query(&self) -> Result<api::SuperWeaponResourcePolicy, String> {
         let mut definitions = Vec::with_capacity(self.types.len());
         for (&ordinal, state) in &self.types {
@@ -289,6 +310,16 @@ impl Configuration {
                 },
                 payload,
                 common_targeting,
+                influence: if self.techno_influence.is_some() {
+                    Some(
+                        state
+                            .influence
+                            .clone()
+                            .ok_or("missing Super influence configuration")?,
+                    )
+                } else {
+                    None
+                },
             });
         }
         let policy = api::SuperWeaponResourcePolicy {
@@ -303,6 +334,10 @@ impl Configuration {
             },
             sound_source_hash: self.sound_source_hash,
             eva_source_hash: self.eva_source_hash,
+            techno_influence: self
+                .techno_influence
+                .as_ref()
+                .map(influence::Technos::query),
             definitions,
             providers: self
                 .providers

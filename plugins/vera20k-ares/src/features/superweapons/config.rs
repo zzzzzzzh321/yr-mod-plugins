@@ -159,6 +159,8 @@ pub(crate) struct TypeState {
     /// Initialize. Later recognized stock Type values do not remap it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(crate) nuclear: Option<super::nuclear::Nuclear>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) influence: Option<vera_mod_api::SuperWeaponInfluencePolicy>,
 }
 
 impl TypeState {
@@ -181,6 +183,7 @@ impl TypeState {
             delivery: None,
             activation_sound: NullableResourceName::Inherit,
             nuclear: None,
+            influence: None,
         }
     }
 
@@ -232,6 +235,9 @@ impl TypeState {
         self.presentation.sound =
             raw.read_sound_reference("SW.Sound", self.presentation.sound.clone());
         self.targeting.read(&raw)?;
+        if let Some(influence) = &mut self.influence {
+            super::influence::read(influence, read, owner, &raw, view)?;
+        }
         //1003349E..100334C5 and10033A0F..10033AB2: retained availability
         // and charge. Scoped lists/House masks use the actual native prefixes.
         self.availability.allow_player =

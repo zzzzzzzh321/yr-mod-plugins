@@ -239,9 +239,9 @@ pub fn manifest() -> ModuleManifest {
     ModuleManifest {
         api_version: API_VERSION,
         id: "vera.reference-gameplay".into(),
-        version: "0.37.0".into(),
+        version: "0.38.0".into(),
         state_version: 1,
-        config_version: 26,
+        config_version: 27,
         hooks: vec![
             HookKind::Configure,
             HookKind::Attach,
@@ -477,6 +477,9 @@ pub(crate) fn evaluate<H: Host>(request: &Request, host: &H) -> Result<Plan, Str
             // Resource domains consume the same read-only physical input; do not
             // transfer/deserialize its full catalog twice in one Rules pass.
             let physical = view.rules_registry_view()?;
+            if let Some(superweapons) = config.superweapons.as_mut() {
+                superweapons.configure_technos(&view, &physical)?;
+            }
             config.production.configure(&view, &physical)?;
             config.emp.configure(&view, &physical);
             config.spotlight.configure(&view, &physical)?;
@@ -828,6 +831,8 @@ mod promotion_sound_tests;
 mod spotlight_tests;
 #[cfg(test)]
 mod startup_tests;
+#[cfg(test)]
+mod super_influence_tests;
 #[cfg(test)]
 mod tests;
 #[cfg(test)]

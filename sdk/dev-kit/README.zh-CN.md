@@ -1,5 +1,7 @@
 # VERA20K 插件独立开发包
 
+0.38／配置27／状态1新增外置指定器和抑制器：`SW.Designators`、`SW.AnyDesignator`、`SW.Inhibitors`、`SW.AnyInhibitor`，以及类型节的 `DesignatorRange`／`InhibitorRange`。配置通过实际类别和原生序号绑定，普通宿主复用现有目标、电力和生命周期查询；不增加逐帧 WASM 调用。旧的非空冻结配置保持缺省域缺失；新对局或真实重置才启用。需要本批配套引擎，完整 Ares 仍未完成。
+
 0.37／配置26／状态1新增可选 `SuperWeaponDeclaration.common_targeting`。插件按物理规则层保留射程、目标模式／偏好、手动／自动掩码及 AutoFire／ManualFire／FireIntoShroud；宿主将其投影到已有目标与 AI 所有者，普通构建也可使用。核弹的预览、选点与发射井资格共用配置，已提交事件保留 Activate 的直接投放分支。Generic 空弹头在 Activate 失败时消耗充能，但不扣费、不计成功发射；旧组件保留先前的弹头提前检查路径。不新增逐帧 WASM 调用；完整 Ares 兼容仍在推进。
 
 0.36／配置25／状态1新增外置 Nuclear 核弹引用与发射子链。纯启动声明 `master_type_lists` 在各层类型数据读取前启用原有 `[WeaponTypes]` 注册器；实际 Weapon 引用和发射它的超武定义贯通发射井、直接投放、NukeMaker、保存与恢复。`SW.Warhead` 按原始时点查找已有弹头，经过中间自定义 Type 的物理节仍保留通用读取，不从最终合并名称补查。裸弹航程保持 INT_MAX，不复制武器的 ProjectileRange。插件继续提供冻结配置，充能、费用、飞行、伤害和退场复用宿主所有者，不新增逐帧 Wasm 调用。完整 Ares／AR315 仍未完成。
@@ -86,7 +88,7 @@ dist/release-new/
 └── vera-mod.json
 ```
 
-声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.36.0开发候选还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
+声明中的文件名与内容摘要由打包工具生成。将这两个文件一起放入作品资源系统，再用作品实际加载的INI配置功能。0.7.0稳定交付的新对局默认启用`AresAmmo`、`AresReload`、`AresNoAmmoWeapon`、`AresManualControl`。当前0.38.0开发候选还默认启用`AresKeepAlive`、`AresAttachEffect`、`AresArmor`、`AresProduction`、`AresEMP`、`AresSpotlight`、`AresTypeConversion`、`AresFoundation`和`AresFaction`，迁移引擎已有的存活判定、附加效果及其隐形/属性依赖、自定义护甲和建筑占地等支持。可以直接使用原Ares标签；`[VeraFeatures]`中对应项设为`no`可分别关闭。标签自身的默认值不变，四个手动限制仍默认`no`。Phobos护盾和自定义过载仍须显式`Shield=yes`与`Overload=yes`，过载依赖护盾。作品的其他美术、音频、地图和规则资源沿用原有分发流程。
 
 如果设置了 `CARGO_TARGET_DIR`，原始 Wasm 的位置随之改变；打包命令中的输入路径也应使用该目标目录。源码修改和编译过程不会自动改变作品当前对局中的组件。
 
@@ -101,7 +103,7 @@ dist/release-new/
 当前验证包括冷启动的规则→模式→地图、实际充能发射、两阶段与直接载荷、费用／记录、伤害／退场、原组件精确保存恢复及旧组件对照。光照与 `NukeFlash.Duration`／`PreImpactAnim`、自定义 EVA Ready／Detected／Activated、共同射程字段、升级挂载和其它边界仍见[兼容台账](../../compatibility/README.zh-CN.md)，不可把本批子链当成完整核弹兼容。旧完整存档继续保留原引擎和精确组件；不承诺跨引擎布局迁移。
 
 
-当前候选为 **0.37／配置26／状态1**，需要本批配套引擎。武器扩展按 `WeaponTypeRef.ordinal` 区分真实实例，名称仅用于说明和校验；两个长名称截断后相同也不会共用 Ammo、ApplyDamage 或 ProjectileRange 历史。公共调用仍集中在 `support/host.rs`，三个功能各在既有武器模块维护自己的冻结字段；不新增第二个弹药、弹体或计时器所有者。
+当前候选为 **0.38／配置27／状态1**，需要本批配套引擎。武器扩展按 `WeaponTypeRef.ordinal` 区分真实实例，名称仅用于说明和校验；两个长名称截断后相同也不会共用 Ammo、ApplyDamage 或 ProjectileRange 历史。公共调用仍集中在 `support/host.rs`，三个功能各在既有武器模块维护自己的冻结字段；不新增第二个弹药、弹体或计时器所有者。
 
 新组件使用 `weapon-registry-view` 和 `weapon-instance-effective:`，并通过 `weapon_instance_resource` 一次返回现有弹药／开火策略。旧组件保留旧请求，只能在唯一名称域回退；同名多实例要求新组件。完整存档布局与组件状态版本分别管理，旧完整存档继续使用原引擎与精确组件。API v1 相同不代表旧宿主能加载新的可选接口。
 
@@ -177,7 +179,7 @@ Ranged=yes
 
 0.19 的 `long_list_readers` 是独立的安装级纯声明，在任何冷 Rules 读取前执行。参考组件直接返回 `Extended2048`，仅扩展 House `Allies`、Techno `Prerequisite` 和 `PrerequisiteOverride`；不受 `AresProduction`／`AresFaction` 开关控制。其他组件可明确返回 `Retail128`，不声明则保留宿主原模式。General 六类前置保持128，物理 INI 行限制保持511字节；原解析器、注册表和外交模块继续负责实际结果。配置版本仍为15，状态版本仍为1；完整旧存档保留对应旧引擎与原组件。
 
-接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.36.0开发候选使用配置版本25、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，Ares 完整文档兼容尚未完成，也未替换保留交付。
+接口编号仍为 SDK API v1，WIT 名称为 `vera:mod-sdk@0.1.0`。参考插件保留内部标识`vera.reference-gameplay`和发布文件名`vera20k-ares.wasm`。稳定交付0.7.0使用配置版本5、状态版本1；当前0.38.0开发候选使用配置版本27、状态版本1；探照灯、类型转换、建筑占地、启动资源和阵营共享配置／玩法增量已完成各自的集中验收，Ares 完整文档兼容尚未完成，也未替换保留交付。
 
 开发分支新增`match_rules`、`effect_resource`、`effects`、`armor_resource`、`production_resource`、`configure_boundary`和`emp_resource`可选能力，以及类型隐形许可等消息字段。宿主须提供物理Rules读取点的注册类型查询、效果实例事务、原数学/动画/隐形所有者和相应保存恢复接入；只认识原有回调的宿主无法运行这版组件。组件的护盾字节与宿主效果列表分别保存，效果列表只有一个所有者。宿主接收静态策略时建立派生缓存，每次效果更新只提交经校验的有序动作。护甲增量已通过关联回归及真实资源加载，Ares 完整文档兼容仍未完成。SDK快照的配套引擎来源提交见`sdk/source.json`。
 

@@ -1,5 +1,13 @@
 # vera20k-ares — external gameplay reference component
 
+Version 0.38 / config27 adds optional exact SuperWeapon influence declarations:
+Designators/Inhibitors and nullable Techno ranges. The existing host collector
+observes current Type identity, ownership, life and Building power; no live guest
+world or per-frame callback is added. Fresh/reset configurations select the new
+domain, while historical nonempty configurations keep absence. The paired host
+is required. See the [Chinese configuration guide](SUPERWEAPON.zh-CN.md).
+Complete Ares compatibility remains open.
+
 Version 0.37 / config26 adds optional common SuperWeapon targeting declarations, physical range retention and ordinary-host AI/cameo integration. Existing simulation owners execute selection, activation, charge, settlement and restoration. Historical absent declarations retain their prior route; matched host support is required. See the [Chinese configuration guide](SUPERWEAPON.zh-CN.md). Complete Ares compatibility remains open.
 
 Version 0.35 / config24 adds optional `MatchRulesPolicy.shrapnel_weapon_assignment`. Fresh configuration and real reset boundaries select it; an older nonempty frozen cohort omits it. `ShrapnelWeapon` retains the actual Weapon allocation, which the installed child keeps through Fire and detonation for Range and RadLevel. Its bare constructor travel budget stays INT_MAX, without a Weapon ProjectileRange copy. This is an admission-time declaration requiring the paired host, with no per-frame Wasm call. Validation covers real-component firing, fragment flight, save/restore and receivers; complete Ares compatibility remains open.

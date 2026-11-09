@@ -3,7 +3,7 @@
   "api_version": 1,
   "wit_package": "vera:mod-sdk@0.1.0",
   "source_repository": "../engine",
-  "source_revision": "fc63465ae46e915a87900f75ad3946cd2b74d21f",
+  "source_revision": "eafcda43bc1c25dd21ee3946b086e77f242f9ff1",
   "paths": [
     "sdk/api",
     "sdk/wit"

@@ -684,7 +684,9 @@ impl Host for SuperSourceHost {
                     serde_json::from_slice(current).map_err(|e| e.to_string())?;
                 assert_eq!(input.read, 0);
                 match reader {
-                    "super-country-mask" | "super-building-list" => Ok(b"null".to_vec()),
+                    "super-country-mask" | "super-building-list" | "super-techno-list" => {
+                        Ok(b"null".to_vec())
+                    }
                     "super-effective:presence" => Ok(b"false".to_vec()),
                     "super-animation-reference"
                     | "super-eva-reference"
@@ -913,9 +915,10 @@ impl Host for NuclearSourceHost {
                         };
                         serde_json::to_vec(&value).map_err(|e| e.to_string())
                     }
-                    "super-country-mask" | "super-building-list" | "super-delivery-list" => {
-                        Ok(b"null".to_vec())
-                    }
+                    "super-country-mask"
+                    | "super-building-list"
+                    | "super-delivery-list"
+                    | "super-techno-list" => Ok(b"null".to_vec()),
                     "super-effective:ares-int"
                     | "super-effective:bool"
                     | "super-effective:name:32"

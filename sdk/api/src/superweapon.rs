@@ -242,6 +242,27 @@ pub enum SuperWeaponPayloadPolicy {
     },
 }
 
+/// Exact common TechnoType pointers resolved at their physical Super read.
+/// Keep order and duplicates: a stored name does not identify an allocation.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SuperWeaponInfluencePolicy {
+    pub designators: Vec<crate::ProductionTypeRef>,
+    pub any_designator: bool,
+    pub inhibitors: Vec<crate::ProductionTypeRef>,
+    pub any_inhibitor: bool,
+}
+
+/// Nullable per-Type ranges in cells. None uses the current Type's raw Sight;
+/// zero and negative values are explicit overrides, not default sentinels.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct TechnoInfluenceDeclaration {
+    pub object: crate::ProductionTypeRef,
+    pub designator_range: Option<i32>,
+    pub inhibitor_range: Option<i32>,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SuperWeaponDeclaration {
@@ -259,6 +280,10 @@ pub struct SuperWeaponDeclaration {
     /// declaration selects the common host target/AI owners for this definition.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub common_targeting: Option<SuperWeaponCommonTargetingPolicy>,
+    /// None keeps historical external no-influence behavior. A declaration
+    /// requires the explicit techno_influence domain on the resource batch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub influence: Option<SuperWeaponInfluencePolicy>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -280,6 +305,10 @@ pub struct SuperWeaponResourcePolicy {
     pub eva_source_hash: Option<u64>,
     pub definitions: Vec<SuperWeaponDeclaration>,
     pub providers: Vec<SuperWeaponProviderDeclaration>,
+    /// None is historical domain absence; Some(empty) selects all-unset
+    /// nullable ranges. Listed exact native slots override that unset base.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub techno_influence: Option<Vec<TechnoInfluenceDeclaration>>,
 }
 
 impl SuperWeaponResourcePolicy {
@@ -297,13 +326,33 @@ impl SuperWeaponResourcePolicy {
                 }
                 _ => true,
             };
-        if self.definitions.len() > LIMIT || self.providers.len() > LIMIT {
+        if self.definitions.len() > LIMIT
+            || self.providers.len() > LIMIT
+            || self
+                .techno_influence
+                .as_ref()
+                .is_some_and(|types| types.len() > LIMIT)
+        {
             return Err("SuperWeapon declaration limit exceeded".into());
+        }
+        let mut influence_types = BTreeSet::new();
+        for declaration in self.techno_influence.iter().flatten() {
+            if !influence_types.insert(declaration.object) {
+                return Err("duplicate Techno influence declaration".into());
+            }
         }
         let mut ordinals = BTreeSet::new();
         for definition in &self.definitions {
             if let Some(targeting) = &definition.common_targeting {
                 targeting.validate()?;
+            }
+            if let Some(influence) = &definition.influence {
+                if self.techno_influence.is_none()
+                    || influence.designators.len() > LIMIT
+                    || influence.inhibitors.len() > LIMIT
+                {
+                    return Err("invalid SuperWeapon influence domain".into());
+                }
             }
             if !ordinals.insert(definition.ordinal)
                 || !valid_name(&definition.stored_id)
@@ -385,10 +434,8 @@ mod tests {
     use super::*;
     use crate::{API_VERSION, Context, Plan, Request};
 
-    #[test]
-    fn common_targeting_keeps_old_absence_and_rejects_conflicting_authority() {
-        let mut policy = SuperWeaponResourcePolicy::default();
-        policy.definitions.push(SuperWeaponDeclaration {
+    fn definition() -> SuperWeaponDeclaration {
+        SuperWeaponDeclaration {
             ordinal: 0,
             stored_id: "Atomic".into(),
             availability: SuperWeaponAvailabilityPolicy {
@@ -413,7 +460,62 @@ mod tests {
             },
             payload: SuperWeaponPayloadPolicy::Retail,
             common_targeting: None,
+            influence: None,
+        }
+    }
+
+    #[test]
+    fn influence_preserves_old_absence_and_checks_exact_domain_members() {
+        let mut policy = SuperWeaponResourcePolicy {
+            definitions: vec![definition()],
+            ..SuperWeaponResourcePolicy::default()
+        };
+        let old = serde_json::to_value(&policy).unwrap();
+        assert!(old.get("techno_influence").is_none());
+        assert!(old["definitions"][0].get("influence").is_none());
+        let restored: SuperWeaponResourcePolicy = serde_json::from_value(old).unwrap();
+        assert!(restored.techno_influence.is_none());
+        assert!(restored.definitions[0].influence.is_none());
+        restored.validate().unwrap();
+
+        let unit = crate::ProductionTypeRef {
+            category: crate::ProductionObjectKind::Unit,
+            ordinal: 0,
+        };
+        policy.definitions[0].influence = Some(SuperWeaponInfluencePolicy {
+            designators: vec![unit, unit],
+            ..SuperWeaponInfluencePolicy::default()
         });
+        assert!(
+            policy.validate().is_err(),
+            "new lists require an explicit range domain"
+        );
+        policy.techno_influence = Some(vec![]);
+        policy.validate().unwrap();
+        let range = TechnoInfluenceDeclaration {
+            object: unit,
+            designator_range: Some(0),
+            inhibitor_range: Some(-1),
+        };
+        policy.techno_influence = Some(vec![range.clone(), range]);
+        assert!(
+            policy.validate().is_err(),
+            "final ranges have one owner per native slot"
+        );
+        policy.techno_influence.as_mut().unwrap()[1].object.category =
+            crate::ProductionObjectKind::Infantry;
+        policy.validate().unwrap();
+        let bytes = serde_json::to_vec(&policy).unwrap();
+        assert_eq!(
+            serde_json::from_slice::<SuperWeaponResourcePolicy>(&bytes).unwrap(),
+            policy
+        );
+    }
+
+    #[test]
+    fn common_targeting_keeps_old_absence_and_rejects_conflicting_authority() {
+        let mut policy = SuperWeaponResourcePolicy::default();
+        policy.definitions.push(definition());
         let old = serde_json::to_value(&policy).unwrap();
         assert!(old["definitions"][0].get("common_targeting").is_none());
         let restored: SuperWeaponResourcePolicy = serde_json::from_value(old).unwrap();

@@ -25,10 +25,10 @@ fn query(context: Query) -> Plan {
 #[test]
 fn startup_source_and_audio_recipes_are_ordered_installation_declarations() {
     assert!(manifest().hooks.contains(&HookKind::StartupResources));
-    // Common targeting is an independent optional frozen configuration cohort.
+    // Influence is an independent optional frozen configuration cohort.
     assert_eq!(
         (manifest().state_version, manifest().config_version),
-        (1, 26)
+        (1, 27)
     );
     assert_eq!(
         query(Query::SourceComposition).startup_resources,
@@ -146,13 +146,13 @@ fn startup_capabilities_are_pure_installation_declarations_without_feature_confi
         assert!(manifest().hooks.contains(&request.context.kind()));
     }
     let manifest = manifest();
-    assert_eq!(manifest.version, "0.37.0");
+    assert_eq!(manifest.version, "0.38.0");
     assert_eq!(
         (
             manifest.api_version,
             manifest.config_version,
             manifest.state_version
         ),
-        (1, 26, 1)
+        (1, 27, 1)
     );
 }
