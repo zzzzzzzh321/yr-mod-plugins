@@ -47,4 +47,4 @@ GenericWarhead 的空弹头不会让通用预览拒绝一个有效目标；它�
 
 这仍不是完整 Ares 超级武器支持。Stealth、Self、Base、MultiMissile、EnemyBase、DropPod、LightningRandom 等目标模式尚未实现；次级防御预选坐标、外置 Designators/Inhibitors、升级建筑挂载和核弹 Light/EVA/PreImpact 等后续链仍待完成。GenericWarhead 的越界落点安全检查和 UnitDelivery 的接纳边界也未因本轮通用射程接入而变成完整原版复现。完整范围见[兼容台账](../../compatibility/README.zh-CN.md)。
 
-旧组件保留自身的配置读取和缺省／提前检查路径；共用宿主判定的修正也会作用于旧组件，不承诺跨引擎版本的逐行为一致。跨类同名、同类存储名截断重名的完整类型身份仍是后续共享机制，不应把本轮常规类型验证扩展成这些特殊场景已经完成。
+旧组件保留自身的配置读取和缺省／提前检查路径；共用宿主判定的修正也会作用于旧组件，不承诺跨引擎版本的逐行为一致。配套宿主现已保留逐槽规则、实际构造、生产／计数、电力和同build恢复中的类别＋原生序号，覆盖这些流程的跨类同名及同类存储名截断重名；其它名称寻址资源、升级和完整侧栏保留链接仍需分别处理。外置Designators/Inhibitors尚未接通，不能据此宣称全部超武目标链已完成。
