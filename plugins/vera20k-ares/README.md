@@ -1,5 +1,7 @@
 # vera20k-ares — external gameplay reference component
 
+Version 0.39 / config28 adds optional `SuperWeaponDeclaration.eva`, retaining five resolved fixed-EVAMD references alongside the existing InsufficientFunds field. The guest owns first initialization and six physical reads; the host reuses the existing immutable binder, event producers and Vox queue. Nuclear and the supported custom handlers consume Ready/Activated/Detected; the sidebar consumes Impatient/SelectTarget. Successful common launch cancels its configured Ready after presentation. Historical nonempty configurations keep domain absence. A paired host is required; other stock redirected handlers and complete Ares remain open.
+
 Version 0.38 / config27 adds optional exact SuperWeapon influence declarations:
 Designators/Inhibitors and nullable Techno ranges. The existing host collector
 observes current Type identity, ownership, life and Building power; no live guest

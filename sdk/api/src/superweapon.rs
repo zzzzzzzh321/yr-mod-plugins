@@ -263,6 +263,18 @@ pub struct TechnoInfluenceDeclaration {
     pub inhibitor_range: Option<i32>,
 }
 
+/// Resolved fixed-EVAMD references. Clear is explicit silence; Inherit is not
+/// permitted here. InsufficientFunds retains its existing declaration field.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct SuperWeaponEvaPolicy {
+    pub ready: crate::NullableResourceName,
+    pub activated: crate::NullableResourceName,
+    pub detected: crate::NullableResourceName,
+    pub impatient: crate::NullableResourceName,
+    pub select_target: crate::NullableResourceName,
+}
+
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct SuperWeaponDeclaration {
@@ -274,6 +286,10 @@ pub struct SuperWeaponDeclaration {
     pub use_ai_targeting: bool,
     pub money_amount: i32,
     pub insufficient_funds_eva: crate::NullableResourceName,
+    /// Historical absence preserves the host's previous EVA producers. A
+    /// present policy retains silence and first-initialization independently.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub eva: Option<SuperWeaponEvaPolicy>,
     pub presentation: SuperWeaponPresentationPolicy,
     pub payload: SuperWeaponPayloadPolicy,
     /// None preserves the historical payload-specific targeting ABI. A present
@@ -343,6 +359,21 @@ impl SuperWeaponResourcePolicy {
         }
         let mut ordinals = BTreeSet::new();
         for definition in &self.definitions {
+            if let Some(eva) = &definition.eva {
+                for reference in [
+                    &eva.ready,
+                    &eva.activated,
+                    &eva.detected,
+                    &eva.impatient,
+                    &eva.select_target,
+                ] {
+                    if matches!(reference, NullableResourceName::Inherit)
+                        || !valid_reference(reference, self.eva_source_hash, true)
+                    {
+                        return Err("invalid resolved SuperWeapon EVA reference".into());
+                    }
+                }
+            }
             if let Some(targeting) = &definition.common_targeting {
                 targeting.validate()?;
             }
@@ -452,6 +483,7 @@ mod tests {
             use_ai_targeting: false,
             money_amount: 0,
             insufficient_funds_eva: crate::NullableResourceName::Inherit,
+            eva: None,
             presentation: SuperWeaponPresentationPolicy {
                 animation: crate::NullableResourceName::Inherit,
                 height: 0,

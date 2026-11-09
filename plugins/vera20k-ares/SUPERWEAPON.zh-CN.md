@@ -1,6 +1,6 @@
 # 超级武器通用目标配置
 
-组件 0.38.0（配置版本 27、状态版本 1）把通用目标配置接入普通插件版引擎。需要配套支持 `SuperWeaponDeclaration.common_targeting`、`influence` 及 `SuperWeaponResourcePolicy.techno_influence` 的引擎；API v1 和 WIT 名称没有变化，不能据此认定任意旧引擎都支持新增字段。无需在编译时启用内置 `ares`。
+组件 0.39.0（配置版本 28、状态版本 1）把通用目标配置接入普通插件版引擎。需要配套支持 `SuperWeaponDeclaration.common_targeting`、`influence`、`eva` 及 `SuperWeaponResourcePolicy.techno_influence` 的引擎；API v1 和 WIT 名称没有变化，不能据此认定任意旧引擎都支持新增字段。无需在编译时启用内置 `ares`。
 
 以已有核弹为例，在其超级武器节中添加：
 
@@ -45,7 +45,7 @@ SW.UseAITargeting=yes
 
 GenericWarhead 的空弹头不会让通用预览拒绝一个有效目标；它会在 Activate 失败。此时 ClickFire 消耗充能，但不扣费、不记成功发射，也不产生伤害。旧组件缺少新增声明时保留原先的提前拒绝行为。
 
-这仍不是完整 Ares 超级武器支持。Stealth、Self、Base、MultiMissile、EnemyBase、DropPod、LightningRandom 等目标模式尚未实现；次级防御预选坐标、升级建筑挂载和核弹 Light/EVA/PreImpact 等后续链仍待完成。GenericWarhead 的越界落点安全检查和 UnitDelivery 的接纳边界也未因本轮通用射程接入而变成完整原版复现。完整范围见[兼容台账](../../compatibility/README.zh-CN.md)。
+这仍不是完整 Ares 超级武器支持。Stealth、Self、Base、MultiMissile、EnemyBase、DropPod、LightningRandom 等目标模式尚未实现；次级防御预选坐标、升级建筑挂载和核弹 Light／PreImpact 以及其他处理器专用 EVA 等后续链仍待完成。GenericWarhead 的越界落点安全检查和 UnitDelivery 的接纳边界也未因本轮通用射程接入而变成完整原版复现。完整范围见[兼容台账](../../compatibility/README.zh-CN.md)。
 
 旧组件保留自身的配置读取和缺省／提前检查路径；共用宿主判定的修正也会作用于旧组件，不承诺跨引擎版本的逐行为一致。配套宿主现已保留逐槽规则、实际构造、生产／计数、电力和同build恢复中的类别＋原生序号，覆盖这些流程的跨类同名及同类存储名截断重名；其它名称寻址资源、升级和完整侧栏保留链接仍需分别处理。指定器／抑制器的共同核弹和 GenericWarhead 目标入口现可使用；其它处理器覆盖和完整目标链仍未完成。
 
@@ -74,3 +74,28 @@ InhibitorRange=5
 相同存储名称的两个实际类型仍分别保存范围和成员身份；名单中的名称只在读取时按原生构造顺序选中首个匹配。附加超武的建筑提供者也按实际 Building 序号保存，后分配的同名建筑不会覆盖另一类型的列表。
 
 本轮接入共同预览与普通 AI 候选筛选，不改变已经提交的发射事件进入 Activate 的阶段边界；偏好／团队／NoTarget 等既有旁路保留。旧组件及旧非空配置不会被普通 Configure 自动升级，新完整存档仍需原始引擎和组件配套。其它 Ares 超武处理器自有覆写、异常国家索引、完整呈现和所有目标模式仍待分别完成。
+
+
+## 超级武器 EVA 提示
+
+0.39 把通用 EVA 配置放入独立的 `features/superweapons/eva.rs`；公共导入仍通过 `support/host.rs`。沿用实际规则、模式和地图读取顺序，不在运行中重新读 INI。
+
+```ini
+[NukeSpecial]
+EVA.Ready=EVA_MyNukeReady
+EVA.Activated=EVA_MyNukeLaunched
+EVA.Detected=EVA_MyNukeDetected
+EVA.Impatient=EVA_MyNukeWait
+EVA.InsufficientFunds=EVA_InsufficientFunds
+EVA.SelectTarget=EVA_SelectTarget
+```
+
+自定义事件要先在作品固定的 `evamd.ini` 的 `[DialogList]` 登记，并配置对应阵营的音频；这里只引用事件 ID，不会从名称创建语音。核弹首次映射时默认 Ready／Activated／Detected 分别为 `EVA_NuclearMissileReady`、`EVA_NuclearMissileLaunched`、`EVA_NuclearSiloDetected`；Impatient 默认静音，另外两项默认 `EVA_InsufficientFunds` 和 `EVA_SelectTarget`。缺少对应事件时默认静音。
+
+后层缺失、空值或未知事件保留先前引用。`none`／`<none>` 可显式静音；固定目录中若恰好登记了同名事件，则优先引用该事件。首次没有可读取节也会消耗初始化，不能在后层补做处理器默认值；改写 Type 不会重做已经执行的初始化。
+
+侧栏在充能或暂停状态不允许发射时使用 Impatient，资金不足使用 InsufficientFunds；AutoFire／ManualFire 的原有拒绝顺序仍保留。成功进入鼠标选点时使用 SelectTarget，立即发射和右击不触发它。
+
+成功发射时播报 Activated，公共呈现结束后清除本地玩家该超武配置的 Ready 等待项；正在播放的语音继续播放。远端发射不会清除本地 Ready，Activate 失败也不会播报 Activated 或取消 Ready。建筑落成及被占领后的发现路径共用首个可用的主／次／附加超武查询，监听者的盟友、战败和游戏模式条件保持原入口所有权。
+
+Ready／Activated／Detected 本批贯通核弹、GenericWarhead 和 UnitDelivery 的现有公共处理器；其他原版重定向处理器仍使用原有消费者，其专用标志、源超武替换和完整生命周期尚待迁移。不要把能读取字段等同于所有处理器都已支持。API v1／WIT 名称不变，新可选声明仍要求配套宿主；存档保留精确组件和对应引擎。

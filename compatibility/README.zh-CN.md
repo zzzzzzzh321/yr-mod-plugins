@@ -1,5 +1,7 @@
 # Ares 外置兼容台账
 
+0.39／配置28／状态1新增外置超武 EVA 配置：保留六个 `EVA.*` 字段的原生读取顺序和首次初始化。核弹及已支持自定义处理器的就绪、发射、发现提示复用现有事件与 Vox 队列，侧栏接入 Impatient／SelectTarget；成功发射后只清除该超武配置的 Ready。旧非空配置保持新增域缺失，新对局或真实重置才启用。需要本批配套引擎；其他原版超武的专用处理器和完整 Ares 仍未完成。
+
 0.38／配置27／状态1新增外置指定器和抑制器：`SW.Designators`、`SW.AnyDesignator`、`SW.Inhibitors`、`SW.AnyInhibitor`，以及类型节的 `DesignatorRange`／`InhibitorRange`。配置通过实际类别和原生序号绑定，普通宿主复用现有目标、电力和生命周期查询；不增加逐帧 WASM 调用。旧的非空冻结配置保持缺省域缺失；新对局或真实重置才启用。需要本批配套引擎，完整 Ares 仍未完成。
 
 本台账用于逐项推进 `vera20k-ares.wasm` 对 Ares 的完整兼容。功能范围、具体限制和完成证据维护在 [ares-features.csv](ares-features.csv)，不要根据组件文件名或少数测试地图推断整体完成。

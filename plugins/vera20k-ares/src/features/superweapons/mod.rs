@@ -1,6 +1,7 @@
 //! Retained SWTypeExt configuration. The native registry owns reference
 //! allocation; the engine keeps all live Super/timer/wallet state.
 mod config;
+mod eva;
 mod influence;
 mod nuclear;
 mod targeting;
@@ -29,6 +30,10 @@ pub(crate) struct Configuration {
     pub(crate) common_targeting: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     techno_influence: Option<influence::Technos>,
+    /// Fresh/reset cohort only. Older nonempty saved configuration never
+    /// acquires new EVA initialization or producer ownership on Configure.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    eva: Option<bool>,
 }
 
 impl Configuration {
@@ -37,6 +42,7 @@ impl Configuration {
             nuclear: Some(true),
             common_targeting: Some(true),
             techno_influence: Some(influence::Technos::default()),
+            eva: Some(true),
             ..Self::default()
         }
     }
@@ -103,8 +109,12 @@ impl Configuration {
         }
         self.retain_sources(view)?;
         let nuclear_enabled = self.nuclear == Some(true);
+        let eva_enabled = self.eva == Some(true);
         let state = self.register(context.ordinal, &context.stored_id)?;
         state.initialize_eva_default(view)?;
+        if eva_enabled && state.eva.is_none() {
+            state.eva = Some(eva::constructor(view)?);
+        }
         let initialize_nuclear = nuclear_enabled
             && !state.initialized
             && context.body_read
@@ -112,6 +122,13 @@ impl Configuration {
         //10033284 ->10033347 consumes a first absent body with mode0.
         if !state.initialized {
             if context.body_read {
+                if let Some(eva) = &mut state.eva {
+                    eva::initialize(
+                        eva,
+                        context.effective_type.as_deref().and_then(Kind::parse),
+                        view,
+                    )?;
+                }
                 state.targeting.map_initial_handler(
                     context
                         .effective_type
@@ -178,8 +195,12 @@ impl Configuration {
         // Late constructor-only definitions have defaults but have not
         // reached Initialize. This does not invent a Type body/visit.
         for (ordinal, name) in physical.superweapons.iter().enumerate() {
-            self.register(u32::try_from(ordinal).map_err(|e| e.to_string())?, name)?
-                .initialize_eva_default(view)?;
+            let eva_enabled = self.eva == Some(true);
+            let state = self.register(u32::try_from(ordinal).map_err(|e| e.to_string())?, name)?;
+            state.initialize_eva_default(view)?;
+            if eva_enabled && state.eva.is_none() {
+                state.eva = Some(eva::constructor(view)?);
+            }
         }
         for (read, point) in physical.reads.iter().enumerate() {
             let SuperWeaponReadSite::Building { object, section } = &point.site else {
@@ -302,6 +323,7 @@ impl Configuration {
                 use_ai_targeting: state.use_ai_targeting,
                 money_amount: state.money_amount,
                 insufficient_funds_eva: state.insufficient_funds_eva.clone(),
+                eva: state.eva.clone(),
                 presentation: api::SuperWeaponPresentationPolicy {
                     animation: state.presentation.animation.clone(),
                     height: state.presentation.height,

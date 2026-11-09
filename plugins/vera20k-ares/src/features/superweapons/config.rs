@@ -149,6 +149,8 @@ pub(crate) struct TypeState {
     pub(crate) presentation: Presentation,
     pub(crate) money_amount: i32,
     pub(crate) insufficient_funds_eva: NullableResourceName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(crate) eva: Option<vera_mod_api::SuperWeaponEvaPolicy>,
     pub(crate) use_ai_targeting: bool,
     pub(crate) generic: Generic,
     pub(crate) delivery: Option<Delivery>,
@@ -178,6 +180,7 @@ impl TypeState {
             // The constructor default is resolved against fixed EVAMD before
             // the first visit, independently of whether an INI body exists.
             insufficient_funds_eva: NullableResourceName::Inherit,
+            eva: None,
             use_ai_targeting: false,
             generic: Generic::default(),
             delivery: None,
@@ -219,6 +222,13 @@ impl TypeState {
     ) -> Result<(), String> {
         let read = context.read;
         let raw = view.section_or_empty(owner);
+        super::eva::read(
+            self.eva.as_mut(),
+            &mut self.insufficient_funds_eva,
+            read,
+            owner,
+            view,
+        )?;
         // SWTypeExt1003354E/64/7A: pointer, signed height, AffectedHouse.
         self.presentation.animation = view.superweapon_read(
             read,
@@ -323,13 +333,6 @@ impl TypeState {
                 false,
             )?
         };
-        self.insufficient_funds_eva = view.superweapon_read(
-            read,
-            owner,
-            "EVA.InsufficientFunds",
-            "super-eva-reference",
-            self.insufficient_funds_eva.clone(),
-        )?;
         self.activation_sound =
             raw.read_sound_reference("SW.ActivationSound", self.activation_sound.clone());
         if self.kind == Kind::GenericWarhead {
