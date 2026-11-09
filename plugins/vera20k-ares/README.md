@@ -29,7 +29,7 @@ This plugin is maintained in the independent `plugin-dev` project at
 dependencies and the packager; the runtime stays in the engine. The Cargo package is
 `vera20k-ares`, its raw core artifact is `vera20k_ares.wasm`, and its publication
 filename is `vera20k-ares.wasm`. The internal `vera.reference-gameplay` identity is retained. Current source is
-version 0.37.0, config_version=26 and state_version=1. API v1 and WIT are unchanged. The filename
+version 0.39.0, config_version=28 and state_version=1. API v1 and WIT are unchanged. The filename
 does not claim complete Ares compatibility; the retained Phobos-compatible
 shield and authored overload remain examples in this first plugin.
 
@@ -39,7 +39,7 @@ are local SDK snapshots whose authoritative source and version are recorded in
 `sdk/source.json`. Compilation needs no engine executable, source checkout,
 game assets or Python runner. Game integration uses a compatible engine.
 
-Current development candidate is 0.35.0, configuration version 24 and entity state
+Current development candidate is 0.39.0, configuration version 28 and entity state
 version 1. The 0.7.0 details below describe the retained lab delivery. The
 startup-resource increment lives in `src/features/resources/startup.rs` and uses
 optional `startup_resources` queries before Rules configuration. It returns ordered
