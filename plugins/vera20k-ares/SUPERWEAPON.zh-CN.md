@@ -24,7 +24,7 @@ SW.RequiresHouse=enemies
 | `SW.AITargeting` | 首次初始化时由处理器设定，核弹默认 Nuke，GenericWarhead 默认 Offensive |
 | `SW.AITargeting.Preference` | 未显式配置时由模式决定；可设 none、offensive、defensive |
 | `SW.UseAITargeting` | 默认 no；yes 时点击使用 AI 选点入口 |
-| `SW.AutoFire` / `SW.ManualFire` | 默认 no / yes；AutoFire=yes 时允许玩家所属国家自动发射，ManualFire=no 限制手动点击 |
+| `SW.AutoFire` / `SW.ManualFire` | 默认 no / yes；AutoFire=yes 时允许玩家所属国家自动发射，ManualFire=no 仅在同时启用 AutoFire 时限制手动点击 |
 
 例如只让核弹自动选择目标、禁止玩家手动点击：
 
@@ -46,3 +46,5 @@ SW.UseAITargeting=yes
 GenericWarhead 的空弹头不会让通用预览拒绝一个有效目标；它会在 Activate 失败。此时 ClickFire 消耗充能，但不扣费、不记成功发射，也不产生伤害。旧组件缺少新增声明时保留原先的提前拒绝行为。
 
 这仍不是完整 Ares 超级武器支持。Stealth、Self、Base、MultiMissile、EnemyBase、DropPod、LightningRandom 等目标模式尚未实现；次级防御预选坐标、外置 Designators/Inhibitors、升级建筑挂载和核弹 Light/EVA/PreImpact 等后续链仍待完成。GenericWarhead 的越界落点安全检查和 UnitDelivery 的接纳边界也未因本轮通用射程接入而变成完整原版复现。完整范围见[兼容台账](../../compatibility/README.zh-CN.md)。
+
+旧组件保留自身的配置读取和缺省／提前检查路径；共用宿主判定的修正也会作用于旧组件，不承诺跨引擎版本的逐行为一致。跨类同名、同类存储名截断重名的完整类型身份仍是后续共享机制，不应把本轮常规类型验证扩展成这些特殊场景已经完成。

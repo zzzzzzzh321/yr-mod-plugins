@@ -1,6 +1,6 @@
 # VERA20K 插件开发工程
 
-0.37／配置26／状态1新增可选 `SuperWeaponDeclaration.common_targeting`。插件按物理规则层保留射程、目标模式／偏好、手动／自动掩码及 AutoFire／ManualFire／FireIntoShroud；宿主将其投影到已有目标与 AI 所有者，普通构建也可使用。核弹的预览、选点与发射井资格共用配置，已提交事件保留 Activate 的直接投放分支。Generic 空弹头在 Activate 失败时消耗充能，但不扣费、不计成功发射；旧组件保持历史行为。不新增逐帧 WASM 调用；完整 Ares 兼容仍在推进。
+0.37／配置26／状态1新增可选 `SuperWeaponDeclaration.common_targeting`。插件按物理规则层保留射程、目标模式／偏好、手动／自动掩码及 AutoFire／ManualFire／FireIntoShroud；宿主将其投影到已有目标与 AI 所有者，普通构建也可使用。核弹的预览、选点与发射井资格共用配置，已提交事件保留 Activate 的直接投放分支。Generic 空弹头在 Activate 失败时消耗充能，但不扣费、不计成功发射；旧组件保留先前的弹头提前检查路径。不新增逐帧 WASM 调用；完整 Ares 兼容仍在推进。
 
 0.36／配置25／状态1新增外置 Nuclear 核弹引用与发射子链。纯启动声明 `master_type_lists` 在各层类型数据读取前启用原有 `[WeaponTypes]` 注册器；实际 Weapon 引用和发射它的超武定义贯通发射井、直接投放、NukeMaker、保存与恢复。`SW.Warhead` 按原始时点查找已有弹头，经过中间自定义 Type 的物理节仍保留通用读取，不从最终合并名称补查。裸弹航程保持 INT_MAX，不复制武器的 ProjectileRange。插件继续提供冻结配置，充能、费用、飞行、伤害和退场复用宿主所有者，不新增逐帧 Wasm 调用。完整 Ares／AR315 仍未完成。
 
